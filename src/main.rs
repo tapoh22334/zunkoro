@@ -5,9 +5,11 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_rapier_collider_gen::*;
 use bevy::window::{PrimaryWindow, WindowMode};
+use bevy::render::texture::{ImageType, CompressedImageFormats};
+
 use rand::prelude::*;
 
-#[derive(Component, Resource, Default)]
+#[derive(Component, Resource, Default, Debug)]
 pub struct GameAsset {
     pub image_handles: HashMap<String, Handle<Image>>,
 }
@@ -43,22 +45,37 @@ fn main() {
         .run();
 }
 
-fn setup_graphics(mut commands: Commands, asset_server: Res<AssetServer>, mut game_assets: ResMut<GameAsset>) {
+fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>>, mut game_assets: ResMut<GameAsset>) {
     // Add a camera so we can see the debug-render.
     commands.spawn((Camera2dBundle::default(), MainCamera));
+
+    //let handle: Handle<Image> = asset_server.load("zun1.png");
+    //println!("check1 {:?}", handle);
+
+    //let handle: Handle<Image> = asset_server.load("zun1.png");
+    //println!("check2 {:?}", handle);
+
+    let image_bytes = include_bytes!("../assets/zun1.png");
+    let image1 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
+
+    let image_bytes = include_bytes!("../assets/zun2.png");
+    let image2 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
+
+    let image_bytes = include_bytes!("../assets/zun3.png");
+    let image3 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
 
     game_assets.image_handles = HashMap::from([
         (
             "zun1_handle".into(),
-            asset_server.load("zun1.png"),
+            image_assets.add(image1),
         ),
         (
             "zun2_handle".into(),
-            asset_server.load("zun2.png"),
+            image_assets.add(image2),
         ),
         (
             "zun3_handle".into(),
-            asset_server.load("zun3.png"),
+            image_assets.add(image3),
         ),
     ]);
 }
@@ -67,13 +84,14 @@ fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
     let mut rng = rand::thread_rng();
     let r = rng.gen_range(3.0..50.0);
 
-    let image_vec = vec![ "zun1.png", "zun2.png", "zun3.png" ];
+    let image_vec = vec![ "zun1_handle", "zun2_handle", "zun3_handle" ];
     let random_index = rng.gen_range(0..image_vec.len());
     let random_image = image_vec[random_index];
 
     let sprite_handle = game_assets.image_handles.get(random_image).unwrap();
     let sprite_image = image_assets.get(sprite_handle).unwrap();
-    let collider = single_convex_polyline_collider_translated(sprite_image).unwrap();
+    //let collider = single_convex_hull_collider_translated(sprite_image).unwrap();
+    let collider = Collider::ball(r);
 
     commands
         .spawn(Ball)
@@ -91,6 +109,7 @@ fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
         .insert(TransformBundle {
                     local: Transform {
                                 translation: Vec3::new(pos.x, pos.y, 0.0),
+                                //scale: Vec3::ONE / r,
                                 ..Default::default()
                             },
                     ..default()
