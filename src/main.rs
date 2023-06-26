@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_rapier_collider_gen::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::render::texture::{ImageType, CompressedImageFormats};
 
@@ -37,7 +38,8 @@ fn main() {
         }))
         .insert_resource(GameAsset::default())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
-        //.add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_physics)
         .add_system(cursor_position)
@@ -64,10 +66,14 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     let image_bytes = include_bytes!("../assets/zun3.png");
     let image3 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
 
+    let image_bytes = include_bytes!("../assets/map.png");
+    let map = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
+
     game_assets.image_handles = HashMap::from([
         ( "zun1_handle".into(), image_assets.add(image1),),
         ( "zun2_handle".into(), image_assets.add(image2),),
         ( "zun3_handle".into(), image_assets.add(image3),),
+        ( "map_handle".into(), image_assets.add(map),),
     ]);
 
 }
@@ -88,7 +94,7 @@ fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
     commands
         .spawn(Ball)
         .insert(RigidBody::Dynamic)
-        .insert(Restitution::coefficient(0.7))
+        .insert(Restitution::coefficient(0.3))
         .insert(collider)
         .insert(SpriteBundle {
                     sprite: Sprite {
@@ -127,12 +133,39 @@ fn add_white_wall(commands: &mut Commands, size: Vec2, pos: Vec2) {
         .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)));
 }
 
+fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
+    let sprite_handle = game_assets.image_handles.get("map_handle").unwrap();
+    let sprite_image = image_assets.get(sprite_handle).unwrap();
+    //let collider = single_convex_polyline_collider_translated(sprite_image).unwrap();
+    //let collider = single_polyline_collider_translated(sprite_image);
+
+    //commands
+    //    .spawn(SpriteBundle {
+    //            texture: sprite_handle.clone(),
+    //            ..Default::default()
+    //        })
+    //    .insert(collider);
+    let colliders = multi_polyline_collider_translated(sprite_image);
+
+    for collider in colliders {
+        commands.spawn((
+            collider,
+            SpriteBundle {
+                texture: sprite_handle.clone(),
+                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                ..default()
+            },
+        ));
+    }
+}
+
 fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_assets: Res<Assets<Image>>) {
 
     /* Create the ground. */
-    add_white_wall(&mut commands, Vec2::new(400.0, 10.0), Vec2::new(0.0, -400.0));
-    add_white_wall(&mut commands, Vec2::new(10.0, 200.0), Vec2::new(200.0, -300.0));
-    add_white_wall(&mut commands, Vec2::new(10.0, 200.0), Vec2::new(-200.0, -300.0));
+    //add_white_wall(&mut commands, Vec2::new(400.0, 10.0), Vec2::new(0.0, -400.0));
+    //add_white_wall(&mut commands, Vec2::new(10.0, 200.0), Vec2::new(200.0, -300.0));
+    //add_white_wall(&mut commands, Vec2::new(10.0, 200.0), Vec2::new(-200.0, -300.0));
+    add_map(&mut commands, &game_assets, &image_assets);
 
     commands
         .spawn(Player)
@@ -213,7 +246,7 @@ fn cursor_position(
     }
 
     let mut rng = rand::thread_rng();
-    if rng.gen::<f32>() < 0.1 {
+    if rng.gen::<f32>() < 0.01 {
         let x = rng.gen_range(0.0..1400.0) - 700.0;
         let y = 600.0 + rng.gen_range(0.0..100.0);
         add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0))
