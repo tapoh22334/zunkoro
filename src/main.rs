@@ -65,22 +65,14 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     let image3 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
 
     game_assets.image_handles = HashMap::from([
-        (
-            "zun1_handle".into(),
-            image_assets.add(image1),
-        ),
-        (
-            "zun2_handle".into(),
-            image_assets.add(image2),
-        ),
-        (
-            "zun3_handle".into(),
-            image_assets.add(image3),
-        ),
+        ( "zun1_handle".into(), image_assets.add(image1),),
+        ( "zun2_handle".into(), image_assets.add(image2),),
+        ( "zun3_handle".into(), image_assets.add(image3),),
     ]);
+
 }
 
-fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2) {
+fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, vel: Vec2) {
     let mut rng = rand::thread_rng();
     let r = rng.gen_range(3.0..50.0);
 
@@ -113,6 +105,10 @@ fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
                                 ..Default::default()
                             },
                     ..default()
+        })
+        .insert(Velocity {
+            linvel: vel,
+            angvel: 0.0,
         })
     ;
 }
@@ -153,7 +149,7 @@ fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_asse
     for i in 0..20 {
         let x = rng.gen_range(0.0..1200.0) - 600.0;
         let y = 600.0 + rng.gen_range(0.0..100.0);
-        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y));
+        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0));
     }
 }
 
@@ -212,13 +208,15 @@ fn cursor_position(
         player_velocity.linvel = Vec2::new(velocity_x, velocity_y);
 
         if buttons.just_pressed(MouseButton::Left) {
-            add_ball(&mut commands, &game_assets, &image_assets, world_position)
+            add_ball(&mut commands, &game_assets, &image_assets, world_position, Vec2::new(0.0, 500.0))
         }
     }
 
     let mut rng = rand::thread_rng();
-    if rng.gen::<f32>() < 0.01 {
-        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(rng.gen_range(0.0..1400.0) - 700.0, 600.0 + rng.gen_range(0.0..100.0)))
+    if rng.gen::<f32>() < 0.1 {
+        let x = rng.gen_range(0.0..1400.0) - 700.0;
+        let y = 600.0 + rng.gen_range(0.0..100.0);
+        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0))
     }
 
 }
