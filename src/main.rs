@@ -25,6 +25,10 @@ struct Player;
 #[derive(Component)]
 struct Ball;
 
+#[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States )]
+enum AppState { #[default] Edit,
+                Game }
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -40,10 +44,12 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierDebugRenderPlugin::default())
-        .add_startup_system(setup_graphics)
-        .add_startup_system(setup_physics)
-        .add_system(cursor_position)
-        .add_system(remove_outside_system)
+        .add_system(setup_graphics.on_startup())
+        .add_state::<AppState>()
+        .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
+        .add_system(cursor_position.in_set(OnUpdate(AppState::Edit)))
+        .add_system(cursor_position.in_set(OnUpdate(AppState::Game)))
+        .add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
         .run();
 }
 
@@ -69,11 +75,15 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     let image_bytes = include_bytes!("../assets/map.png");
     let map = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
 
+    let image_bytes = include_bytes!("../assets/map_element/gear1024.png");
+    let gear1024 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
+
     game_assets.image_handles = HashMap::from([
         ( "zun1_handle".into(), image_assets.add(image1),),
         ( "zun2_handle".into(), image_assets.add(image2),),
         ( "zun3_handle".into(), image_assets.add(image3),),
         ( "map_handle".into(), image_assets.add(map),),
+        ( "gear1024_handle".into(), image_assets.add(gear1024),),
     ]);
 
 }
@@ -133,6 +143,48 @@ fn add_white_wall(commands: &mut Commands, size: Vec2, pos: Vec2) {
         .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)));
 }
 
+fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, anglevel: f32) {
+    let sprite_handle = game_assets.image_handles.get("gear1024_handle").unwrap();
+    let sprite_image = image_assets.get(sprite_handle).unwrap();
+    let colliders = multi_polyline_collider_translated(sprite_image);
+
+    let mut entity = commands.spawn((
+            SpriteBundle {
+                texture: sprite_handle.clone(),
+                ..default()
+            },
+        ));
+    entity
+        .insert(RigidBody::KinematicVelocityBased)
+        .insert(Velocity {
+            linvel: Vec2::new(0.0, 0.0),
+            angvel: anglevel,
+        });
+
+    for collider in colliders {
+        entity.with_children(|children| {
+            children.spawn(collider)
+                .insert(TransformBundle {
+                    local: Transform {
+                        translation: Vec3::new(pos.x, pos.y, 0.0),
+                        ..Default::default()
+                    },
+                    ..default()
+                })
+            ;
+        });
+    }
+
+    entity.insert(TransformBundle {
+            local: Transform {
+                translation: Vec3::new(pos.x, pos.y, 0.0),
+                scale: Vec3::ONE / 3.0,
+                ..Default::default()
+            },
+            ..default()
+        });
+}
+
 fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
     let sprite_handle = game_assets.image_handles.get("map_handle").unwrap();
     let sprite_image = image_assets.get(sprite_handle).unwrap();
@@ -147,16 +199,22 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
     //    .insert(collider);
     let colliders = multi_polyline_collider_translated(sprite_image);
 
+    let mut entity = commands.spawn((
+        SpriteBundle {
+            texture: sprite_handle.clone(),
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            ..default()
+        },
+    ));
+
     for collider in colliders {
-        commands.spawn((
-            collider,
-            SpriteBundle {
-                texture: sprite_handle.clone(),
-                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                ..default()
-            },
-        ));
+        entity.with_children(|children| {
+            children.spawn(collider);
+        });
     }
+
+    add_gear(commands, &game_assets, &image_assets, Vec2::new(0.0, 0.0), -0.5);
+
 }
 
 fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_assets: Res<Assets<Image>>) {
@@ -178,12 +236,12 @@ fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_asse
         .insert(TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0)));
 
     /* Create the bouncing ball. */
-    let mut rng = rand::thread_rng();
-    for i in 0..20 {
-        let x = rng.gen_range(0.0..1200.0) - 600.0;
-        let y = 600.0 + rng.gen_range(0.0..100.0);
-        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0));
-    }
+    //let mut rng = rand::thread_rng();
+    //for i in 0..20 {
+    //    let x = rng.gen_range(0.0..1200.0) - 600.0;
+    //    let y = 600.0 + rng.gen_range(0.0..100.0);
+    //    add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0));
+    //}
 }
 
 
@@ -235,21 +293,21 @@ fn cursor_position(
         .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
         .map(|ray| ray.origin.truncate())
     {
-        let k_coefficient = 50.0;
-        let velocity_x = (world_position.x - player_position.translation.x) * k_coefficient;
-        let velocity_y = (world_position.y - player_position.translation.y) * k_coefficient;
-        player_velocity.linvel = Vec2::new(velocity_x, velocity_y);
+        //let k_coefficient = 50.0;
+        //let velocity_x = (world_position.x - player_position.translation.x) * k_coefficient;
+        //let velocity_y = (world_position.y - player_position.translation.y) * k_coefficient;
+        //player_velocity.linvel = Vec2::new(velocity_x, velocity_y);
 
-        if buttons.just_pressed(MouseButton::Left) {
-            add_ball(&mut commands, &game_assets, &image_assets, world_position, Vec2::new(0.0, 500.0))
-        }
+        //if buttons.just_pressed(MouseButton::Left) {
+        //    add_ball(&mut commands, &game_assets, &image_assets, world_position, Vec2::new(0.0, 500.0))
+        //}
     }
 
-    let mut rng = rand::thread_rng();
-    if rng.gen::<f32>() < 0.01 {
-        let x = rng.gen_range(0.0..1400.0) - 700.0;
-        let y = 600.0 + rng.gen_range(0.0..100.0);
-        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0))
-    }
+    //let mut rng = rand::thread_rng();
+    //if rng.gen::<f32>() < 0.01 {
+    //    let x = rng.gen_range(0.0..1400.0) - 700.0;
+    //    let y = 600.0 + rng.gen_range(0.0..100.0);
+    //    add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0))
+    //}
 
 }
