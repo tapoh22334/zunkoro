@@ -47,45 +47,34 @@ fn main() {
         .add_system(setup_graphics.on_startup())
         .add_state::<AppState>()
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
-        .add_system(cursor_position.in_set(OnUpdate(AppState::Edit)))
-        .add_system(cursor_position.in_set(OnUpdate(AppState::Game)))
-        .add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
+        .add_system(handle_click.in_set(OnUpdate(AppState::Edit)))
+        //.add_system(cursor_position.in_set(OnUpdate(AppState::Edit)))
+        //.add_system(cursor_position.in_set(OnUpdate(AppState::Game)))
+        //.add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
         .run();
+}
+
+fn load_image(game_assets: &mut GameAsset, image_assets: &mut Assets<Image>, image_bytes: &[u8], name: &str) {
+    let image = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
+    let handle = image_assets.add(image);
+    game_assets.image_handles.insert(name.to_string(), handle);
 }
 
 fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>>, mut game_assets: ResMut<GameAsset>) {
     // Add a camera so we can see the debug-render.
     commands.spawn((Camera2dBundle::default(), MainCamera));
 
-    //let handle: Handle<Image> = asset_server.load("zun1.png");
-    //println!("check1 {:?}", handle);
+    let image_mappings = [
+        (include_bytes!("../assets/zun1.png").as_slice(), "zun1_handle"),
+        (include_bytes!("../assets/zun2.png").as_slice(), "zun2_handle"),
+        (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
+        (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
+        (include_bytes!("../assets/map_element/gear1024.png").as_slice(), "gear1024_handle"),
+    ];
 
-    //let handle: Handle<Image> = asset_server.load("zun1.png");
-    //println!("check2 {:?}", handle);
-
-    let image_bytes = include_bytes!("../assets/zun1.png");
-    let image1 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
-
-    let image_bytes = include_bytes!("../assets/zun2.png");
-    let image2 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
-
-    let image_bytes = include_bytes!("../assets/zun3.png");
-    let image3 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
-
-    let image_bytes = include_bytes!("../assets/map.png");
-    let map = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
-
-    let image_bytes = include_bytes!("../assets/map_element/gear1024.png");
-    let gear1024 = Image::from_buffer(image_bytes, ImageType::MimeType("image/png"), CompressedImageFormats::NONE, true).unwrap();
-
-    game_assets.image_handles = HashMap::from([
-        ( "zun1_handle".into(), image_assets.add(image1),),
-        ( "zun2_handle".into(), image_assets.add(image2),),
-        ( "zun3_handle".into(), image_assets.add(image3),),
-        ( "map_handle".into(), image_assets.add(map),),
-        ( "gear1024_handle".into(), image_assets.add(gear1024),),
-    ]);
-
+    for (path, handle) in image_mappings.iter() {
+        load_image(&mut game_assets, &mut image_assets, path, handle);
+    }
 }
 
 fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, vel: Vec2) {
@@ -155,6 +144,7 @@ fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
             },
         ));
     entity
+        //.insert(Interaction::default())
         .insert(RigidBody::KinematicVelocityBased)
         .insert(Velocity {
             linvel: Vec2::new(0.0, 0.0),
@@ -197,19 +187,20 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
     //            ..Default::default()
     //        })
     //    .insert(collider);
-    let colliders = multi_polyline_collider_translated(sprite_image);
+    let colliders = multi_convex_polyline_collider_translated(sprite_image);
 
     let mut entity = commands.spawn((
-        SpriteBundle {
-            texture: sprite_handle.clone(),
-            transform: Transform::from_xyz(0.0, 0.0, 0.0),
-            ..default()
-        },
-    ));
+            SpriteBundle {
+                texture: sprite_handle.clone(),
+                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                ..default()
+            },
+            Interaction::default()
+        ));
 
     for collider in colliders {
         entity.with_children(|children| {
-            children.spawn(collider);
+            children.spawn(collider.unwrap());
         });
     }
 
@@ -266,48 +257,81 @@ fn remove_outside_system(
 }
 
 
-fn cursor_position(
-    mut commands: Commands,
-    mut player: Query<(&mut Transform, &mut Velocity), With<Player>>,
-    buttons: Res<Input<MouseButton>>,
-    game_assets: Res<GameAsset>,
-    image_assets: Res<Assets<Image>>,
-    windows_q: Query<&Window, With<PrimaryWindow>>,
-    camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-) {
-    //for transform in player.iter() {
-    //    println!("Ball altitude: {}", transform.translation.y);
-    //}
-    let (mut player_position, mut player_velocity) = player.single_mut();
+fn find_nearest_entity(query: &Query<(Entity, &Transform)>, position: Vec2) -> Option<Entity> {
+    let mut nearest_entity: Option<Entity> = None;
+    let mut nearest_distance_squared = f32::MAX;
 
-    // Games typically only have one window (the primary window)
-    let window = windows_q.single();
+    for (entity, transform) in query.iter() {
+        let entity_position = transform.translation.truncate();
+        let distance_squared = position.distance_squared(entity_position);
 
-    // get the camera info and transform
-    // assuming there is exactly one main camera entity, so query::single() is OK
-    let (camera, camera_transform) = camera_q.single();
-
-    // check if the cursor is inside the window and get its position
-    // then, ask bevy to convert into world coordinates, and truncate to discard Z
-    if let Some(world_position) = window.cursor_position()
-        .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
-        .map(|ray| ray.origin.truncate())
-    {
-        //let k_coefficient = 50.0;
-        //let velocity_x = (world_position.x - player_position.translation.x) * k_coefficient;
-        //let velocity_y = (world_position.y - player_position.translation.y) * k_coefficient;
-        //player_velocity.linvel = Vec2::new(velocity_x, velocity_y);
-
-        //if buttons.just_pressed(MouseButton::Left) {
-        //    add_ball(&mut commands, &game_assets, &image_assets, world_position, Vec2::new(0.0, 500.0))
-        //}
+        if distance_squared < nearest_distance_squared {
+            nearest_distance_squared = distance_squared;
+            nearest_entity = Some(entity);
+        }
     }
 
-    //let mut rng = rand::thread_rng();
-    //if rng.gen::<f32>() < 0.01 {
-    //    let x = rng.gen_range(0.0..1400.0) - 700.0;
-    //    let y = 600.0 + rng.gen_range(0.0..100.0);
-    //    add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0))
-    //}
-
+    nearest_entity
 }
+
+fn handle_click(
+    mouse_button_input: Res<Input<MouseButton>>,
+    interaction_query: Query<(Entity, &Interaction)>,
+) {
+    if mouse_button_input.just_pressed(MouseButton::Left) {
+        println!("Clicked ");
+        for (entity, interaction) in interaction_query.iter() {
+            println!("entity: {:?}, {:?}", entity, interaction);
+            if *interaction == Interaction::Clicked {
+                println!("entity: {:?}", entity);
+            }
+        }
+    }
+}
+
+//fn cursor_position(
+//    mut commands: Commands,
+//    mut player: Query<(&mut Transform, &mut Velocity), With<Player>>,
+//    buttons: Res<Input<MouseButton>>,
+//    game_assets: Res<GameAsset>,
+//    image_assets: Res<Assets<Image>>,
+//    windows_q: Query<&Window, With<PrimaryWindow>>,
+//    camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+//    //transform_q: Query<(Entity, &Transform)>,
+//) {
+//    //for transform in player.iter() {
+//    //    println!("Ball altitude: {}", transform.translation.y);
+//    //}
+//    let (mut player_position, mut player_velocity) = player.single_mut();
+//
+//    // Games typically only have one window (the primary window)
+//    let window = windows_q.single();
+//
+//    // get the camera info and transform
+//    // assuming there is exactly one main camera entity, so query::single() is OK
+//    let (camera, camera_transform) = camera_q.single();
+//
+//    // check if the cursor is inside the window and get its position
+//    // then, ask bevy to convert into world coordinates, and truncate to discard Z
+//    if let Some(world_position) = window.cursor_position()
+//        .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
+//        .map(|ray| ray.origin.truncate())
+//    {
+//        //let k_coefficient = 50.0;
+//        //let velocity_x = (world_position.x - player_position.translation.x) * k_coefficient;
+//        //let velocity_y = (world_position.y - player_position.translation.y) * k_coefficient;
+//        //player_velocity.linvel = Vec2::new(velocity_x, velocity_y);
+//
+//        //if buttons.just_pressed(MouseButton::Left) {
+//        //    add_ball(&mut commands, &game_assets, &image_assets, world_position, Vec2::new(0.0, 500.0))
+//        //}
+//    }
+//
+//    //let mut rng = rand::thread_rng();
+//    //if rng.gen::<f32>() < 0.01 {
+//    //    let x = rng.gen_range(0.0..1400.0) - 700.0;
+//    //    let y = 600.0 + rng.gen_range(0.0..100.0);
+//    //    add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0))
+//    //}
+//
+//}
