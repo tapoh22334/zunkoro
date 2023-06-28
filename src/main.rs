@@ -84,7 +84,8 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map_element/gear1024.png").as_slice(), "gear1024_handle"),
-        (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512_handle"),
+        (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
+        (include_bytes!("../assets/map_element/gear_sorting_512.png").as_slice(), "gear_sorting_512"),
     ];
 
     for (path, handle) in image_mappings.iter() {
@@ -113,10 +114,8 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
 //    }
 //}
 
-fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, vel: Vec2) {
+fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, r: f32, vel: Vec2) {
     let mut rng = rand::thread_rng();
-    let r = rng.gen_range(3.0..50.0);
-
     let image_vec = vec![ "zun1_handle", "zun2_handle", "zun3_handle" ];
     let random_index = rng.gen_range(0..image_vec.len());
     let random_image = image_vec[random_index];
@@ -168,8 +167,14 @@ fn add_white_wall(commands: &mut Commands, size: Vec2, pos: Vec2) {
         .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)));
 }
 
-fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, r: f32, anglevel: f32) {
-    let sprite_handle = game_assets.image_handles.get("gear_simple_512_handle").unwrap();
+fn add_gear(commands: &mut Commands,
+            game_assets: &Res<GameAsset>,
+            image_assets: &Res<Assets<Image>>,
+            name: &str,
+            pos: Vec2,
+            r: f32,
+            anglevel: f32) {
+    let sprite_handle = game_assets.image_handles.get(name).unwrap();
     let sprite_image = image_assets.get(sprite_handle).unwrap();
     let colliders = multi_polyline_collider_translated(sprite_image);
 
@@ -218,17 +223,6 @@ fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
 
     entity.insert(BBSize{x: 512.0, y: 512.0});
 
-    //commands.spawn(
-    //    SpriteBundle {
-    //        sprite: Sprite {
-    //            color: Color::WHITE,
-    //            custom_size: Some(Vec2::new(30.0, 30.0)),
-    //            ..Default::default()
-    //        },
-    //        ..Default::default()
-    //    })
-    //.insert(TransformBundle::from(Transform::from_xyz(512.0, -512.0, 0.0)));
-
 }
 
 fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
@@ -260,7 +254,7 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
         });
     }
 
-    add_gear(commands, &game_assets, &image_assets, Vec2::new(0.0, 0.0), 1.0, -0.5);
+    add_gear(commands, &game_assets, &image_assets, "gear_simple_512", Vec2::new(0.0, 0.0), 1.0, -0.5);
 
 }
 
@@ -287,7 +281,9 @@ fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_asse
     for i in 0..20 {
         let x = rng.gen_range(0.0..1200.0) - 600.0;
         let y = 600.0 + rng.gen_range(0.0..100.0);
-        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0));
+        let r = 10.0;
+
+        add_ball_random(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), r, Vec2::new(0.0, 0.0));
     }
 }
 
@@ -416,12 +412,21 @@ fn spawn_entity (
 
     egui::Window::new("spawn").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
         ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("Spawn a gear");
+            ui.label("Gear simple");
             if ui.button("Spawn").clicked() {
-                info!("Gear spawned");
-                add_gear(&mut commands, &game_assets, &image_assets, Vec2::new(0.0, 0.0), 1.0, -0.5);
+                info!("Gear simple spawned");
+                add_gear(&mut commands, &game_assets, &image_assets, "gear_simple_512", Vec2::new(0.0, 0.0), 1.0, -0.5);
             }
-            });
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Gear sorting");
+            if ui.button("Spawn").clicked() {
+                info!("Gear sorting spawned");
+                add_gear(&mut commands, &game_assets, &image_assets, "gear_sorting_512", Vec2::new(0.0, 0.0), 1.0, -0.5);
+            }
+        });
+
     });
 
 }
