@@ -1,12 +1,17 @@
 //#![windows_subsystem = "windows"]
 
 use std::collections::HashMap;
-use bevy::prelude::*;
+use bevy::{input::common_conditions::input_toggle_active, prelude::*};
 use bevy_rapier2d::prelude::*;
 use bevy_rapier_collider_gen::*;
+use bevy_inspector_egui::bevy_egui::{EguiContext, EguiPlugin};
+use bevy_inspector_egui::bevy_egui::egui;
+use bevy_inspector_egui::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::render::texture::{ImageType, CompressedImageFormats};
+use bevy::sprite::collide_aabb::collide;
 
 use rand::prelude::*;
 
@@ -19,11 +24,16 @@ pub struct GameAsset {
 #[derive(Component)]
 struct MainCamera;
 
-#[derive(Component)]
-struct Player;
+// `InspectorOptions` are completely optional
+#[derive(Component, Reflect, Resource, Default, InspectorOptions)]
+#[reflect(Resource, InspectorOptions)]
+struct Player { pick: Option<Entity> }
 
 #[derive(Component)]
 struct Ball;
+
+#[derive(Component)]
+struct BBSize { x: f32, y: f32 }
 
 #[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States )]
 enum AppState { #[default] Edit,
@@ -44,10 +54,12 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierDebugRenderPlugin::default())
+        .register_type::<Player>()
+        .add_plugin(FilterQueryInspectorPlugin::<With<Player>>::default())
         .add_system(setup_graphics.on_startup())
         .add_state::<AppState>()
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
-        .add_system(handle_click.in_set(OnUpdate(AppState::Edit)))
+        .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
         //.add_system(cursor_position.in_set(OnUpdate(AppState::Edit)))
         //.add_system(cursor_position.in_set(OnUpdate(AppState::Game)))
         //.add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
@@ -70,12 +82,34 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map_element/gear1024.png").as_slice(), "gear1024_handle"),
+        (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512_handle"),
     ];
 
     for (path, handle) in image_mappings.iter() {
         load_image(&mut game_assets, &mut image_assets, path, handle);
     }
 }
+
+//fn inspector_ui(player_q: Query<&mut Player>, world: &mut World) {
+//    let mut player_entity = player_q.single_mut();
+//
+//    let mut egui_context = world
+//        .query_filtered::<&mut EguiContext, With<PrimaryWindow>>()
+//        .single(world)
+//        .clone();
+//
+//    if let Some(entity) = player_entity.pick {
+//        egui::SidePanel::right("inspector")
+//            .default_width(250.0)
+//            .show(egui_context.get_mut(), |ui| {
+//                egui::ScrollArea::vertical().show(ui, |ui| {
+//                    ui.heading("Inspector");
+//                    bevy_inspector_egui::bevy_inspector::ui_for_entity(world, entity, ui);
+//                    ui.allocate_space(ui.available_size());
+//                });
+//            });
+//    }
+//}
 
 fn add_ball(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, vel: Vec2) {
     let mut rng = rand::thread_rng();
@@ -132,19 +166,23 @@ fn add_white_wall(commands: &mut Commands, size: Vec2, pos: Vec2) {
         .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)));
 }
 
-fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, anglevel: f32) {
-    let sprite_handle = game_assets.image_handles.get("gear1024_handle").unwrap();
+fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, r: f32, anglevel: f32) {
+    let sprite_handle = game_assets.image_handles.get("gear_simple_512_handle").unwrap();
     let sprite_image = image_assets.get(sprite_handle).unwrap();
     let colliders = multi_polyline_collider_translated(sprite_image);
 
     let mut entity = commands.spawn((
             SpriteBundle {
+                sprite: Sprite {
+                    ..default()
+                },
                 texture: sprite_handle.clone(),
                 ..default()
             },
         ));
+
     entity
-        //.insert(Interaction::default())
+        .insert(Interaction::default())
         .insert(RigidBody::KinematicVelocityBased)
         .insert(Velocity {
             linvel: Vec2::new(0.0, 0.0),
@@ -166,13 +204,28 @@ fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
     }
 
     entity.insert(TransformBundle {
-            local: Transform {
-                translation: Vec3::new(pos.x, pos.y, 0.0),
-                scale: Vec3::ONE / 3.0,
-                ..Default::default()
-            },
-            ..default()
-        });
+                local: Transform {
+                    translation: Vec3::new(pos.x, pos.y, 0.0),
+                    scale: r * Vec3::ONE,
+                    ..Default::default()
+                },
+                ..default()
+                },
+        );
+
+    entity.insert(BBSize{x: 512.0, y: 512.0});
+
+    //commands.spawn(
+    //    SpriteBundle {
+    //        sprite: Sprite {
+    //            color: Color::WHITE,
+    //            custom_size: Some(Vec2::new(30.0, 30.0)),
+    //            ..Default::default()
+    //        },
+    //        ..Default::default()
+    //    })
+    //.insert(TransformBundle::from(Transform::from_xyz(512.0, -512.0, 0.0)));
+
 }
 
 fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
@@ -187,7 +240,7 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
     //            ..Default::default()
     //        })
     //    .insert(collider);
-    let colliders = multi_convex_polyline_collider_translated(sprite_image);
+    let colliders = multi_polyline_collider_translated(sprite_image);
 
     let mut entity = commands.spawn((
             SpriteBundle {
@@ -200,11 +253,11 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
 
     for collider in colliders {
         entity.with_children(|children| {
-            children.spawn(collider.unwrap());
+            children.spawn(collider);
         });
     }
 
-    add_gear(commands, &game_assets, &image_assets, Vec2::new(0.0, 0.0), -0.5);
+    add_gear(commands, &game_assets, &image_assets, Vec2::new(0.0, 0.0), 1.0, -0.5);
 
 }
 
@@ -217,7 +270,7 @@ fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_asse
     add_map(&mut commands, &game_assets, &image_assets);
 
     commands
-        .spawn(Player)
+        .spawn(Player{pick: None})
         //.insert(RigidBody::Dynamic)
         //.insert(Collider::ball(10.0))
         .insert(Velocity {
@@ -227,12 +280,12 @@ fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_asse
         .insert(TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0)));
 
     /* Create the bouncing ball. */
-    //let mut rng = rand::thread_rng();
-    //for i in 0..20 {
-    //    let x = rng.gen_range(0.0..1200.0) - 600.0;
-    //    let y = 600.0 + rng.gen_range(0.0..100.0);
-    //    add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0));
-    //}
+    let mut rng = rand::thread_rng();
+    for i in 0..20 {
+        let x = rng.gen_range(0.0..1200.0) - 600.0;
+        let y = 600.0 + rng.gen_range(0.0..100.0);
+        add_ball(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), Vec2::new(0.0, 0.0));
+    }
 }
 
 
@@ -249,7 +302,6 @@ fn remove_outside_system(
         let window_position_x = position.translation.x + window_width / 2.0;
         let window_position_y = position.translation.y + window_height / 2.0;
 
-        // エンティティが画面外に出た場合に削除する
         if window_position_x < 0.0 || window_position_x > window_width || window_position_y < 0.0 {
             commands.entity(entity).despawn();
         }
@@ -257,35 +309,128 @@ fn remove_outside_system(
 }
 
 
-fn find_nearest_entity(query: &Query<(Entity, &Transform)>, position: Vec2) -> Option<Entity> {
-    let mut nearest_entity: Option<Entity> = None;
-    let mut nearest_distance_squared = f32::MAX;
+//fn find_nearest_entity(query: &Query<(Entity, &Transform)>, position: Vec2) -> Option<Entity> {
+//    let mut nearest_entity: Option<Entity> = None;
+//    let mut nearest_distance_squared = f32::MAX;
+//
+//    for (entity, transform) in query.iter() {
+//        let entity_position = transform.translation.truncate();
+//        let distance_squared = position.distance_squared(entity_position);
+//
+//        if distance_squared < nearest_distance_squared {
+//            nearest_distance_squared = distance_squared;
+//            nearest_entity = Some(entity);
+//        }
+//    }
+//
+//    nearest_entity
+//}
 
-    for (entity, transform) in query.iter() {
-        let entity_position = transform.translation.truncate();
-        let distance_squared = position.distance_squared(entity_position);
+//fn handle_click(
+//    mouse_button_input: Res<Input<MouseButton>>,
+//    interaction_query: Query<(Entity, &Interaction)>,
+//    rapier_context: Res<RapierContext>
+//) {
+//    if mouse_button_input.just_pressed(MouseButton::Left) {
+//        println!("Clicked ");
+//        for (entity, interaction) in interaction_query.iter() {
+//            println!("entity: {:?}, {:?}", entity, interaction);
+//            if *interaction == Interaction::Clicked {
+//                println!("entity: {:?}", entity);
+//            }
+//        }
+//    }
+//}
 
-        if distance_squared < nearest_distance_squared {
-            nearest_distance_squared = distance_squared;
-            nearest_entity = Some(entity);
-        }
-    }
+#[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States )]
+enum EditMode { #[default] Select,
+                Translate,
+                Scale, }
+/* Project a point inside of a system. */
+fn handle_user_input(
+    mut commands: Commands,
+    keys: Res<Input<KeyCode>>,
+    buttons: Res<Input<MouseButton>>,
+    mut player_q: Query<&mut Player>,
+    windows_q: Query<&Window, With<PrimaryWindow>>,
+    camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    mut transform_q: Query<(Entity, &mut Transform, &mut BBSize)>,
+    mut edit_mode: Local<EditMode>,
+    ) {
 
-    nearest_entity
-}
+    let mut player_entity = player_q.single_mut();
 
-fn handle_click(
-    mouse_button_input: Res<Input<MouseButton>>,
-    interaction_query: Query<(Entity, &Interaction)>,
-) {
-    if mouse_button_input.just_pressed(MouseButton::Left) {
-        println!("Clicked ");
-        for (entity, interaction) in interaction_query.iter() {
-            println!("entity: {:?}, {:?}", entity, interaction);
-            if *interaction == Interaction::Clicked {
-                println!("entity: {:?}", entity);
+    // Games typically only have one window (the primary window)
+    let window = windows_q.single();
+
+    // get the camera info and transform
+    // assuming there is exactly one main camera entity, so query::single() is OK
+    let (camera, camera_transform) = camera_q.single();
+
+    // check if the cursor is inside the window and get its position
+    // then, ask bevy to convert into world coordinates, and truncate to discard Z
+    if let Some(world_position) = window.cursor_position()
+        .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
+        .map(|ray| ray.origin.truncate())
+    {
+        if buttons.just_pressed(MouseButton::Left) {
+            for (entity, transform, size) in transform_q.iter() {
+                let sized_width = size.x * transform.scale.x;
+                let sized_height = size.y * transform.scale.y;
+
+                if collide(transform.translation,
+                           Vec2::new(sized_width, sized_height),
+                           Vec3::new(world_position.x, world_position.y, 0.0),
+                           Vec2::new(0.0, 0.0)).is_some() {
+                    println!("clicked {:?}", entity);
+                    player_entity.pick = Some(entity);
+                }
             }
         }
+
+        if buttons.just_pressed(MouseButton::Right) {
+            //player_entity.pick = None;
+            *edit_mode = EditMode::Select;
+        }
+
+        if player_entity.pick.is_some() {
+            if keys.pressed(KeyCode::Escape) || keys.pressed(KeyCode::Q) {
+                *edit_mode = EditMode::Select;
+            } else if keys.pressed(KeyCode::T) {
+                *edit_mode = EditMode::Translate;
+            } else if keys.pressed(KeyCode::S) {
+                *edit_mode = EditMode::Scale;
+            }
+        }
+
+        match *edit_mode {
+            EditMode::Translate => {
+                if let Some(entity) = player_entity.pick {
+                    if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
+                        transform.translation.x = world_position.x;
+                        transform.translation.y = world_position.y;
+                    }
+                }
+            }
+
+            EditMode::Scale => {
+                if let Some(entity) = player_entity.pick {
+                    if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
+                        let pos = Vec2::new(transform.translation.x, transform.translation.y);
+                        let r = pos.distance(world_position);
+                        let scale = r / Vec2::new(0.0, 0.0).distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+                        transform.scale = Vec3::ONE * scale;
+                    }
+                }
+            }
+
+            _ => {}
+        }
+
+        // stop dragging if mouse button was released
+        //if buttons.just_released(MouseButton::Left) {
+        //    player_entity.pick = None;
+        //}
     }
 }
 
