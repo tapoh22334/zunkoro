@@ -132,6 +132,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/map_element/gear1024.png").as_slice(), "gear1024_handle"),
         (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
         (include_bytes!("../assets/map_element/gear_sorting_512.png").as_slice(), "gear_sorting_512"),
+        (include_bytes!("../assets/map_element/pad_velocity.png").as_slice(), "pad_velocity_handle"),
     ];
 
     for (path, handle) in image_mappings.iter() {
@@ -175,7 +176,7 @@ fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, image_
         .spawn(Ball)
         .insert(RigidBody::Dynamic)
         .insert(Restitution::coefficient(0.7))
-        .insert(Friction::coefficient(0.3))
+        .insert(Friction::coefficient(0.01))
         .insert(collider)
         .insert(SpriteBundle {
                     sprite: Sprite {
@@ -235,20 +236,34 @@ fn add_zundamon_gate(commands: &mut Commands, size: Vec2, pos: Vec2) -> Entity {
 }
 
 
-fn add_pad_velocity(commands: &mut Commands, size: Vec2, pos: Vec2, vel: Vec2) -> Entity {
+fn add_pad_velocity(commands: &mut Commands,
+                    game_assets: &Res<GameAsset>,
+                    size: Vec2,
+                    pos: Vec2,
+                    vel: Vec2) -> Entity {
+
+    let sprite_handle = game_assets.image_handles.get("pad_velocity_handle").unwrap();
     let mut entity = commands
         .spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::BLUE,
                     custom_size: Some(Vec2::new(size.x, size.y)),
                     ..Default::default()
                 },
+                texture: sprite_handle.clone(),
                 ..Default::default()
             });
         // .insert(Collider::cuboid(size.x / 2.0, size.y / 2.0))
 
+    let angle = Vec2::new(0.0, 1.0).angle_between(vel.normalize());
     entity
-        .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)))
+        .insert(TransformBundle {
+                local: Transform {
+                    translation: Vec3::new(pos.x, pos.y, 0.0),
+                    rotation: Quat::from_axis_angle(Vec3::new(0.0, 0.0, 1.0), angle),
+                    ..Default::default()
+                },
+                ..default()
+                })
         .insert(BBSize{x: size.x, y: size.y})
         .insert(PadVelocity {vel});
 
@@ -494,11 +509,15 @@ fn handle_user_input(
                         *edit_context = EditContext::Edit(pick, EditTool::Select);
                     } else if keys.pressed(KeyCode::T) {
                         *edit_context = EditContext::Edit(pick, EditTool::Translate);
+
                     } else if keys.pressed(KeyCode::S) {
                         *edit_context = EditContext::Edit(pick, EditTool::Scale);
                     } else if edit_tool == EditTool::Scale && keys.pressed(KeyCode::D) {
                         *edit_context = EditContext::Edit(pick, EditTool::ScaleDistort);
-                    } 
+                    } else if keys.pressed(KeyCode::Delete) {
+                        commands.entity(pick.unwrap()).despawn();
+                        *edit_context = EditContext::Edit(None, EditTool::Select);
+                    }
                 }
 
                 match edit_tool {
@@ -565,9 +584,10 @@ fn handle_user_input(
                                 let dir = (world_position - origin).normalize();
                                 let vel = dir * 300.0;
                                 let entity = add_pad_velocity(&mut commands,
-                                                               Vec2::new(32.0, 32.0),
-                                                               origin,
-                                                               vel);
+                                                              &game_assets,
+                                                              Vec2::new(32.0, 32.0),
+                                                              origin,
+                                                              vel);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
