@@ -1,4 +1,6 @@
 //#![windows_subsystem = "windows"]
+use serde::{Serialize, Deserialize};
+
 use bevy::prelude::*;
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::render::texture::{ImageType, CompressedImageFormats};
@@ -37,11 +39,37 @@ const BALL_SIZE: f32 = 10.0;
 #[derive(Component)]
 struct BBSize { x: f32, y: f32 }
 
-#[derive(Component, Reflect)]
-struct GateZundamon { remain: i32, prob: f32}
+#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+struct GearSimple {scale: f32, position: Vec2, anglevel: f32}
 
-#[derive(Component, Reflect, Clone, Copy)]
-struct PadVelocity { vel: Vec2 }
+#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+struct GearSorting {scale: f32, position: Vec2, anglevel: f32}
+
+#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+struct GateZundamon {size: Vec2, position: Vec2, remain: i32, prob: f32 }
+
+#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+struct PadVelocity {size: Vec2, position: Vec2, velocity: Vec2}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SaveContainer {
+    gear_simple: Vec<GearSimple>,
+    gear_sorting: Vec<GearSorting>,
+    gate_zundamon: Vec<GateZundamon>,
+    pad_velocity: Vec<PadVelocity>,
+}
+
+impl SaveContainer {
+    fn new() -> Self {
+        Self {
+            gear_simple: Vec::new(),
+            gear_sorting: Vec::new(),
+            gate_zundamon: Vec::new(),
+            pad_velocity: Vec::new(),
+        }
+    }
+}
+
 
 #[derive(Resource, Reflect, FromReflect, Clone, Copy, PartialEq, Debug, Default, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
@@ -50,6 +78,9 @@ enum EditTool { #[default] Select,
                 Scale,
                 ScaleDistort,
                 }
+
+struct SaveWorldEvent(String);
+struct LoadWorldEvent(String);
 
 #[derive(Resource, Reflect, FromReflect, Clone, Copy, PartialEq, Debug, Default, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
@@ -95,22 +126,112 @@ fn main() {
         .add_plugin(EguiPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         //.add_plugin(WorldInspectorPlugin::new())
-        .add_plugin(RapierDebugRenderPlugin::default())
-        .add_plugin(ResourceInspectorPlugin::<EditContext>::default())
+        //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
+        //.add_plugin(RapierDebugRenderPlugin::default())
         .insert_resource(GameAsset::default())
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         .add_state::<AppState>()
-        .add_system(game_mode_select)
         .add_system(setup_graphics.on_startup())
+
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
+        .add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
         .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit)))
+
         .add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
+
         .register_type::<GateZundamon>()
         .add_system(gate_zundamon_system.in_set(OnUpdate(AppState::Game)))
+
         .register_type::<PadVelocity>()
         .add_system(pad_velocity_system.in_set(OnUpdate(AppState::Game)))
+
+        .add_event::<SaveWorldEvent>()
+        .add_system(save_world)
+        .add_event::<LoadWorldEvent>()
+        .add_system(load_world)
         .run();
+}
+
+fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
+              gear_simple_q: Query<(&Velocity, &Transform, &GearSimple)>,
+              gear_sorting_q: Query<(&Velocity, &Transform, &GearSorting)>,
+              gate_zundamon_q: Query<(&Transform, &GateZundamon)>,
+              pad_velocity_q: Query<(&Transform, &PadVelocity)>,
+              ) {
+    let mut save_container = SaveContainer::new();
+
+    for e in save_world_er.iter() {
+        let file = &e.0;
+        println!("received event: {}", file);
+
+        for (v, t, e) in gear_simple_q.iter() {
+            let mut e = e.clone();
+            e.scale = t.scale.truncate().distance(Vec2 { x: 0.0, y: 0.0 });
+            e.position = t.translation.truncate();
+            e.anglevel = v.angvel;
+            save_container.gear_simple.push(e.clone());
+        }
+
+        for (v, t, e) in gear_sorting_q.iter() {
+            let mut e = e.clone();
+            e.scale = t.scale.truncate().distance(Vec2 { x: 0.0, y: 0.0 });
+            e.position = t.translation.truncate();
+            e.anglevel = v.angvel;
+            save_container.gear_sorting.push(e.clone());
+        }
+
+        for (t, e) in gate_zundamon_q.iter() {
+            let mut e = e.clone();
+            e.size = e.size * t.scale.truncate();
+            e.position = t.translation.truncate();
+            save_container.gate_zundamon.push(e.clone());
+        }
+
+        for (t, e) in pad_velocity_q.iter() {
+            let mut e = e.clone();
+            e.size = e.size * t.scale.truncate();
+            e.position = t.translation.truncate();
+            save_container.pad_velocity.push(e.clone());
+        }
+
+        std::fs::write(file, serde_json::to_string(&save_container).unwrap()).unwrap();
+        println!("file saved: {}", file);
+    }
+}
+
+fn load_world(
+    mut load_world_er: EventReader<LoadWorldEvent>,
+    mut commands: Commands,
+    game_assets: Res<GameAsset>,
+    image_assets: Res<Assets<Image>>,
+    ) {
+
+    for e in load_world_er.iter() {
+        let file = &e.0;
+        println!("received event: {}", file);
+
+        let json_str = std::fs::read_to_string(file).unwrap();
+        let save_container: SaveContainer = serde_json::from_str(&json_str).unwrap();
+
+        for e in save_container.gear_simple {
+            add_gear_simple(&mut commands, &game_assets, &image_assets, e);
+        }
+
+        for e in save_container.gear_sorting {
+            add_gear_sorting(&mut commands, &game_assets, &image_assets, e);
+        }
+
+        for e in save_container.gate_zundamon {
+            add_zundamon_gate(&mut commands, e);
+        }
+
+        for e in save_container.pad_velocity {
+            add_pad_velocity(&mut commands, &game_assets, e);
+        }
+
+        //println!("{:?}", save_container);
+    }
 }
 
 fn load_image(game_assets: &mut GameAsset, image_assets: &mut Assets<Image>, image_bytes: &[u8], name: &str) {
@@ -139,6 +260,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         load_image(&mut game_assets, &mut image_assets, path, handle);
     }
 }
+
 
 //fn inspector_ui(player_q: Query<&mut Player>, world: &mut World) {
 //    let mut player_entity = player_q.single_mut();
@@ -201,21 +323,23 @@ fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, image_
     ;
 }
 
-fn add_white_wall(commands: &mut Commands, size: Vec2, pos: Vec2) {
-    commands
-        .spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::WHITE,
-                    custom_size: Some(Vec2::new(size.x, size.y)),
-                    ..Default::default()
-                },
-                ..Default::default()
-            })
-        .insert(Collider::cuboid(size.x / 2.0, size.y / 2.0))
-        .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)));
-}
+//fn add_white_wall(commands: &mut Commands, size: Vec2, pos: Vec2) {
+//    commands
+//        .spawn(SpriteBundle {
+//                sprite: Sprite {
+//                    color: Color::WHITE,
+//                    custom_size: Some(Vec2::new(size.x, size.y)),
+//                    ..Default::default()
+//                },
+//                ..Default::default()
+//            })
+//        .insert(Collider::cuboid(size.x / 2.0, size.y / 2.0))
+//        .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)));
+//}
 
-fn add_zundamon_gate(commands: &mut Commands, size: Vec2, pos: Vec2) -> Entity {
+fn add_zundamon_gate(commands: &mut Commands, gate_zundamon: GateZundamon) -> Entity {
+    let size = gate_zundamon.size;
+    let pos = gate_zundamon.position;
     let mut entity = commands
         .spawn(SpriteBundle {
                 sprite: Sprite {
@@ -230,7 +354,7 @@ fn add_zundamon_gate(commands: &mut Commands, size: Vec2, pos: Vec2) -> Entity {
     entity
         .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)))
         .insert(BBSize{x: size.x, y: size.y})
-        .insert(GateZundamon {remain: 100, prob: 0.1});
+        .insert(gate_zundamon);
 
     return entity.id();
 }
@@ -238,9 +362,10 @@ fn add_zundamon_gate(commands: &mut Commands, size: Vec2, pos: Vec2) -> Entity {
 
 fn add_pad_velocity(commands: &mut Commands,
                     game_assets: &Res<GameAsset>,
-                    size: Vec2,
-                    pos: Vec2,
-                    vel: Vec2) -> Entity {
+                    pad_velocity: PadVelocity) -> Entity {
+    let size = pad_velocity.size;
+    let pos = pad_velocity.position;
+    let vel = pad_velocity.velocity;
 
     let sprite_handle = game_assets.image_handles.get("pad_velocity_handle").unwrap();
     let mut entity = commands
@@ -265,11 +390,44 @@ fn add_pad_velocity(commands: &mut Commands,
                 ..default()
                 })
         .insert(BBSize{x: size.x, y: size.y})
-        .insert(PadVelocity {vel});
+        .insert(pad_velocity);
 
     return entity.id();
 }
 
+fn add_gear_simple(commands: &mut Commands,
+            game_assets: &Res<GameAsset>,
+            image_assets: &Res<Assets<Image>>,
+            gear_simple: GearSimple) -> Entity {
+
+    let id = add_gear(commands,
+             game_assets,
+             image_assets,
+             "gear_simple_512",
+             gear_simple.position,
+             gear_simple.scale,
+             gear_simple.anglevel);
+
+    let id = commands.entity(id).insert(gear_simple).id();
+    return id;
+}
+
+fn add_gear_sorting(commands: &mut Commands,
+            game_assets: &Res<GameAsset>,
+            image_assets: &Res<Assets<Image>>,
+            gear_sorting: GearSorting) -> Entity {
+
+    let id = add_gear(commands,
+             game_assets,
+             image_assets,
+             "gear_sorting_512",
+             gear_sorting.position,
+             gear_sorting.scale,
+             gear_sorting.anglevel);
+
+    let id = commands.entity(id).insert(gear_sorting).id();
+    return id;
+}
 
 fn add_gear(commands: &mut Commands,
             game_assets: &Res<GameAsset>,
@@ -438,14 +596,13 @@ fn pad_velocity_system(
         let cuboid_size = Vec2::new(bbsize.x, bbsize.y) / 2.0 * squeeze(transform.scale);
         let shape = Collider::cuboid(cuboid_size.x, cuboid_size.y);
         let shape_pos = squeeze(transform.translation);
-        let shape_rot = 0.0;
+        let (shape_rot, _, _) = transform.rotation.to_euler(EulerRot::ZXY);
         let filter = QueryFilter::only_dynamic();
 
         rapier_context.intersections_with_shape(
             shape_pos, shape_rot, &shape, filter, |entity| {
-            println!("The entity {:?} intersects our shape.", entity);
                 if let Ok(mut vel) = ball_q.get_mut(entity) {
-                    vel.0.linvel = pad_velocity.vel;
+                    vel.0.linvel = pad_velocity.velocity;
                 }
             true // Return `false` instead if we want to stop searching for other colliders that contain this point.
         });
@@ -560,19 +717,29 @@ fn handle_user_input(
                 if buttons.just_pressed(MouseButton::Left) {
                     match map_object {
                         MapObject::GearSimple => {
-                            let entity = add_gear(&mut commands, &game_assets, &image_assets, "gear_simple_512", world_position, 1.0, -0.5);
+                            let gs = GearSimple {
+                                scale: 1.0, position: world_position, anglevel: -0.5
+                            };
+                            let entity = add_gear_simple(&mut commands, &game_assets, &image_assets, gs);
                             *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                         }
 
                         MapObject::GearSorting => {
-                            let entity = add_gear(&mut commands, &game_assets, &image_assets, "gear_sorting_512", world_position, 1.0, -0.5);
+                            let gs = GearSorting {
+                                scale: 1.0, position: world_position, anglevel: -0.5
+                            };
+                            let entity = add_gear_sorting(&mut commands, &game_assets, &image_assets, gs);
                             *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                         }
 
                         MapObject::GateZundamon => {
-                            let entity = add_zundamon_gate(&mut commands,
-                                                           Vec2::new(128.0, 32.0),
-                                                           world_position);
+                            let gz = GateZundamon {
+                                        size: Vec2::new(128.0, 32.0),
+                                        position: world_position,
+                                        remain: 100,
+                                        prob: 0.1
+                            };
+                            let entity = add_zundamon_gate(&mut commands, gz);
                             *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                         }
 
@@ -583,11 +750,14 @@ fn handle_user_input(
                                 let origin = origin.unwrap();
                                 let dir = (world_position - origin).normalize();
                                 let vel = dir * 300.0;
+                                let pd = PadVelocity {
+                                            position: origin,
+                                            size: Vec2::new(32.0, 32.0),
+                                            velocity: vel
+                                };
                                 let entity = add_pad_velocity(&mut commands,
                                                               &game_assets,
-                                                              Vec2::new(32.0, 32.0),
-                                                              origin,
-                                                              vel);
+                                                              pd);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -645,11 +815,27 @@ fn spawn_map_object (
 
 fn game_mode_select (
     mut commands: Commands,
+    mut save_world_ew: EventWriter<SaveWorldEvent>,
+    mut load_world_ew: EventWriter<LoadWorldEvent>,
     mut egui_contexts: EguiContexts,
     mut next_app_state: ResMut<NextState<AppState>>,
     ){
 
-    egui::Window::new("GameMode").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
+    egui::Window::new("GameControl").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Save");
+            if ui.button("o").clicked() {
+                save_world_ew.send(SaveWorldEvent("assets/map.json".to_string()));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Load");
+            if ui.button("o").clicked() {
+                load_world_ew.send(LoadWorldEvent("assets/map.json".to_string()));
+            }
+        });
+
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Edit");
             if ui.button("o").clicked() {
