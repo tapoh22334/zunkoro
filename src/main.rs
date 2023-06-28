@@ -1,18 +1,18 @@
 //#![windows_subsystem = "windows"]
-
-use std::collections::HashMap;
-use bevy::{input::common_conditions::input_toggle_active, prelude::*};
-use bevy_rapier2d::prelude::*;
-use bevy_rapier_collider_gen::*;
-use bevy_inspector_egui::bevy_egui::{EguiContext, EguiPlugin};
-use bevy_inspector_egui::bevy_egui::egui;
-use bevy_inspector_egui::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
+use bevy::prelude::*;
 use bevy::window::{PrimaryWindow, WindowMode};
 use bevy::render::texture::{ImageType, CompressedImageFormats};
 use bevy::sprite::collide_aabb::collide;
 
+use bevy_rapier2d::prelude::*;
+use bevy_rapier_collider_gen::*;
+
+use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy_inspector_egui::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
+
+use std::collections::HashMap;
 use rand::prelude::*;
 
 #[derive(Component, Resource, Default, Debug)]
@@ -50,16 +50,18 @@ fn main() {
             }),
             ..default()
         }))
-        .insert_resource(GameAsset::default())
+        .add_plugin(EguiPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierDebugRenderPlugin::default())
-        .register_type::<Player>()
         .add_plugin(FilterQueryInspectorPlugin::<With<Player>>::default())
-        .add_system(setup_graphics.on_startup())
+        .insert_resource(GameAsset::default())
+        .register_type::<Player>()
         .add_state::<AppState>()
+        .add_system(setup_graphics.on_startup())
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
         .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
+        .add_system(spawn_entity.in_set(OnUpdate(AppState::Edit)))
         //.add_system(cursor_position.in_set(OnUpdate(AppState::Edit)))
         //.add_system(cursor_position.in_set(OnUpdate(AppState::Game)))
         //.add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
@@ -184,6 +186,7 @@ fn add_gear(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets:
     entity
         .insert(Interaction::default())
         .insert(RigidBody::KinematicVelocityBased)
+        .insert(Restitution::coefficient(0.0))
         .insert(Velocity {
             linvel: Vec2::new(0.0, 0.0),
             angvel: anglevel,
@@ -309,39 +312,6 @@ fn remove_outside_system(
 }
 
 
-//fn find_nearest_entity(query: &Query<(Entity, &Transform)>, position: Vec2) -> Option<Entity> {
-//    let mut nearest_entity: Option<Entity> = None;
-//    let mut nearest_distance_squared = f32::MAX;
-//
-//    for (entity, transform) in query.iter() {
-//        let entity_position = transform.translation.truncate();
-//        let distance_squared = position.distance_squared(entity_position);
-//
-//        if distance_squared < nearest_distance_squared {
-//            nearest_distance_squared = distance_squared;
-//            nearest_entity = Some(entity);
-//        }
-//    }
-//
-//    nearest_entity
-//}
-
-//fn handle_click(
-//    mouse_button_input: Res<Input<MouseButton>>,
-//    interaction_query: Query<(Entity, &Interaction)>,
-//    rapier_context: Res<RapierContext>
-//) {
-//    if mouse_button_input.just_pressed(MouseButton::Left) {
-//        println!("Clicked ");
-//        for (entity, interaction) in interaction_query.iter() {
-//            println!("entity: {:?}, {:?}", entity, interaction);
-//            if *interaction == Interaction::Clicked {
-//                println!("entity: {:?}", entity);
-//            }
-//        }
-//    }
-//}
-
 #[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States )]
 enum EditMode { #[default] Select,
                 Translate,
@@ -383,14 +353,17 @@ fn handle_user_input(
                            Vec3::new(world_position.x, world_position.y, 0.0),
                            Vec2::new(0.0, 0.0)).is_some() {
                     println!("clicked {:?}", entity);
+
                     player_entity.pick = Some(entity);
-                }
+                    *edit_mode = EditMode::Translate;
+                } 
             }
         }
 
-        if buttons.just_pressed(MouseButton::Right) {
-            //player_entity.pick = None;
-            *edit_mode = EditMode::Select;
+        if buttons.just_released(MouseButton::Left) {
+            if *edit_mode != EditMode::Select {
+                *edit_mode = EditMode::Select;
+            }
         }
 
         if player_entity.pick.is_some() {
@@ -434,6 +407,24 @@ fn handle_user_input(
     }
 }
 
+fn spawn_entity (
+    mut commands: Commands,
+    mut egui_contexts: EguiContexts,
+    game_assets: Res<GameAsset>,
+    image_assets: Res<Assets<Image>>,
+    ){
+
+    egui::Window::new("spawn").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Spawn a gear");
+            if ui.button("Spawn").clicked() {
+                info!("Gear spawned");
+                add_gear(&mut commands, &game_assets, &image_assets, Vec2::new(0.0, 0.0), 1.0, -0.5);
+            }
+            });
+    });
+
+}
 //fn cursor_position(
 //    mut commands: Commands,
 //    mut player: Query<(&mut Transform, &mut Velocity), With<Player>>,
