@@ -35,9 +35,24 @@ struct Ball;
 #[derive(Component)]
 struct BBSize { x: f32, y: f32 }
 
-#[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States )]
-enum AppState { #[default] Edit,
-                Game }
+
+#[derive(Clone, Copy, Hash, PartialEq, Debug, Default)]
+enum EditTool { #[default] Select,
+                Translate,
+                Scale, }
+
+#[derive(Clone, Copy, Hash, PartialEq, Debug)]
+enum MapObject {
+    GearSimple,
+    GearSorting,
+}
+
+#[derive(Component, Resource, Hash, PartialEq, Debug)]
+enum EditMode { Edit(EditTool),
+                Spawn(MapObject)}
+
+#[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
+enum AppState { #[default] Edit}
 
 fn main() {
     App::new()
@@ -56,6 +71,7 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(FilterQueryInspectorPlugin::<With<Player>>::default())
         .insert_resource(GameAsset::default())
+        .insert_resource(EditMode::Edit(EditTool::Select))
         .register_type::<Player>()
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
@@ -202,7 +218,6 @@ fn add_gear(commands: &mut Commands,
             children.spawn(collider)
                 .insert(TransformBundle {
                     local: Transform {
-                        translation: Vec3::new(pos.x, pos.y, 0.0),
                         ..Default::default()
                     },
                     ..default()
@@ -308,20 +323,18 @@ fn remove_outside_system(
 }
 
 
-#[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States )]
-enum EditMode { #[default] Select,
-                Translate,
-                Scale, }
 /* Project a point inside of a system. */
 fn handle_user_input(
     mut commands: Commands,
     keys: Res<Input<KeyCode>>,
     buttons: Res<Input<MouseButton>>,
-    mut player_q: Query<&mut Player>,
+    game_assets: Res<GameAsset>,
+    mut edit_mode: ResMut<EditMode>,
+    image_assets: Res<Assets<Image>>,
     windows_q: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    mut player_q: Query<&mut Player>,
     mut transform_q: Query<(Entity, &mut Transform, &mut BBSize)>,
-    mut edit_mode: Local<EditMode>,
     ) {
 
     let mut player_entity = player_q.single_mut();
@@ -339,61 +352,81 @@ fn handle_user_input(
         .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
         .map(|ray| ray.origin.truncate())
     {
-        if buttons.just_pressed(MouseButton::Left) {
-            for (entity, transform, size) in transform_q.iter() {
-                let sized_width = size.x * transform.scale.x;
-                let sized_height = size.y * transform.scale.y;
-
-                if collide(transform.translation,
-                           Vec2::new(sized_width, sized_height),
-                           Vec3::new(world_position.x, world_position.y, 0.0),
-                           Vec2::new(0.0, 0.0)).is_some() {
-                    println!("clicked {:?}", entity);
-
-                    player_entity.pick = Some(entity);
-                    *edit_mode = EditMode::Translate;
-                } 
-            }
-        }
-
-        if buttons.just_released(MouseButton::Left) {
-            if *edit_mode != EditMode::Select {
-                *edit_mode = EditMode::Select;
-            }
-        }
-
-        if player_entity.pick.is_some() {
-            if keys.pressed(KeyCode::Escape) || keys.pressed(KeyCode::Q) {
-                *edit_mode = EditMode::Select;
-            } else if keys.pressed(KeyCode::T) {
-                *edit_mode = EditMode::Translate;
-            } else if keys.pressed(KeyCode::S) {
-                *edit_mode = EditMode::Scale;
-            }
-        }
-
         match *edit_mode {
-            EditMode::Translate => {
-                if let Some(entity) = player_entity.pick {
-                    if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
-                        transform.translation.x = world_position.x;
-                        transform.translation.y = world_position.y;
+            EditMode::Edit(edit_tool) => {
+                if buttons.just_pressed(MouseButton::Left) {
+                    for (entity, transform, size) in transform_q.iter() {
+                        let sized_width = size.x * transform.scale.x;
+                        let sized_height = size.y * transform.scale.y;
+
+                        if collide(transform.translation,
+                                   Vec2::new(sized_width, sized_height),
+                                   Vec3::new(world_position.x, world_position.y, 0.0),
+                                   Vec2::new(0.0, 0.0)).is_some() {
+                            println!("clicked {:?}", entity);
+
+                            player_entity.pick = Some(entity);
+                            *edit_mode = EditMode::Edit(EditTool::Select);
+                        } 
                     }
+                }
+
+                if buttons.just_released(MouseButton::Left) {
+                    if edit_tool != EditTool::Select {
+                        *edit_mode = EditMode::Edit(EditTool::Select);
+                    }
+                }
+
+                if player_entity.pick.is_some() {
+                    if keys.pressed(KeyCode::Escape) || keys.pressed(KeyCode::Q) {
+                        *edit_mode = EditMode::Edit(EditTool::Select);
+                    } else if keys.pressed(KeyCode::T) {
+                        *edit_mode = EditMode::Edit(EditTool::Translate);
+                    } else if keys.pressed(KeyCode::S) {
+                        *edit_mode = EditMode::Edit(EditTool::Scale);
+                    }
+                }
+
+                match edit_tool {
+                    EditTool::Translate => {
+                        if let Some(entity) = player_entity.pick {
+                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
+                                transform.translation.x = world_position.x;
+                                transform.translation.y = world_position.y;
+                            }
+                        }
+                    }
+
+                    EditTool::Scale => {
+                        if let Some(entity) = player_entity.pick {
+                            if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
+                                let pos = Vec2::new(transform.translation.x, transform.translation.y);
+                                let r = pos.distance(world_position);
+                                let scale = r / Vec2::new(0.0, 0.0).distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+                                transform.scale = Vec3::ONE * scale;
+                            }
+                        }
+                    }
+
+                    _ => {}
                 }
             }
 
-            EditMode::Scale => {
-                if let Some(entity) = player_entity.pick {
-                    if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
-                        let pos = Vec2::new(transform.translation.x, transform.translation.y);
-                        let r = pos.distance(world_position);
-                        let scale = r / Vec2::new(0.0, 0.0).distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
-                        transform.scale = Vec3::ONE * scale;
+            EditMode::Spawn(map_object) => {
+                if buttons.just_pressed(MouseButton::Left) {
+                    match map_object {
+                        MapObject::GearSimple => {
+                            add_gear(&mut commands, &game_assets, &image_assets, "gear_simple_512", world_position, 1.0, -0.5);
+                            *edit_mode = EditMode::Edit(EditTool::Select);
+                        }
+
+                        MapObject::GearSorting => {
+                            add_gear(&mut commands, &game_assets, &image_assets, "gear_sorting_512", world_position, 1.0, -0.5);
+                            *edit_mode = EditMode::Edit(EditTool::Select);
+                        }
                     }
                 }
             }
-
-            _ => {}
         }
 
         // stop dragging if mouse button was released
@@ -406,8 +439,7 @@ fn handle_user_input(
 fn spawn_entity (
     mut commands: Commands,
     mut egui_contexts: EguiContexts,
-    game_assets: Res<GameAsset>,
-    image_assets: Res<Assets<Image>>,
+    mut edit_mode: ResMut<EditMode>,
     ){
 
     egui::Window::new("spawn").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
@@ -415,7 +447,7 @@ fn spawn_entity (
             ui.label("Gear simple");
             if ui.button("Spawn").clicked() {
                 info!("Gear simple spawned");
-                add_gear(&mut commands, &game_assets, &image_assets, "gear_simple_512", Vec2::new(0.0, 0.0), 1.0, -0.5);
+                *edit_mode = EditMode::Spawn(MapObject::GearSimple);
             }
         });
 
@@ -423,7 +455,7 @@ fn spawn_entity (
             ui.label("Gear sorting");
             if ui.button("Spawn").clicked() {
                 info!("Gear sorting spawned");
-                add_gear(&mut commands, &game_assets, &image_assets, "gear_sorting_512", Vec2::new(0.0, 0.0), 1.0, -0.5);
+                *edit_mode = EditMode::Spawn(MapObject::GearSorting);
             }
         });
 
