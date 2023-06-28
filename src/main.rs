@@ -48,7 +48,7 @@ enum MapObject {
 }
 
 #[derive(Component, Resource, Hash, PartialEq, Debug)]
-enum EditMode { Edit(EditTool),
+enum EditContext { Edit(EditTool),
                 Spawn(MapObject)}
 
 #[derive( Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
@@ -71,7 +71,7 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(FilterQueryInspectorPlugin::<With<Player>>::default())
         .insert_resource(GameAsset::default())
-        .insert_resource(EditMode::Edit(EditTool::Select))
+        .insert_resource(EditContext::Edit(EditTool::Select))
         .register_type::<Player>()
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
@@ -144,7 +144,8 @@ fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, image_
     commands
         .spawn(Ball)
         .insert(RigidBody::Dynamic)
-        .insert(Restitution::coefficient(0.3))
+        .insert(Restitution::coefficient(0.7))
+        .insert(Friction::coefficient(0.3))
         .insert(collider)
         .insert(SpriteBundle {
                     sprite: Sprite {
@@ -296,7 +297,7 @@ fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_asse
     for i in 0..20 {
         let x = rng.gen_range(0.0..1200.0) - 600.0;
         let y = 600.0 + rng.gen_range(0.0..100.0);
-        let r = 10.0;
+        let r = 30.0;
 
         add_ball_random(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), r, Vec2::new(0.0, 0.0));
     }
@@ -329,7 +330,7 @@ fn handle_user_input(
     keys: Res<Input<KeyCode>>,
     buttons: Res<Input<MouseButton>>,
     game_assets: Res<GameAsset>,
-    mut edit_mode: ResMut<EditMode>,
+    mut edit_mode: ResMut<EditContext>,
     image_assets: Res<Assets<Image>>,
     windows_q: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
@@ -353,7 +354,7 @@ fn handle_user_input(
         .map(|ray| ray.origin.truncate())
     {
         match *edit_mode {
-            EditMode::Edit(edit_tool) => {
+            EditContext::Edit(edit_tool) => {
                 if buttons.just_pressed(MouseButton::Left) {
                     for (entity, transform, size) in transform_q.iter() {
                         let sized_width = size.x * transform.scale.x;
@@ -366,24 +367,24 @@ fn handle_user_input(
                             println!("clicked {:?}", entity);
 
                             player_entity.pick = Some(entity);
-                            *edit_mode = EditMode::Edit(EditTool::Select);
+                            *edit_mode = EditContext::Edit(EditTool::Select);
                         } 
                     }
                 }
 
                 if buttons.just_released(MouseButton::Left) {
                     if edit_tool != EditTool::Select {
-                        *edit_mode = EditMode::Edit(EditTool::Select);
+                        *edit_mode = EditContext::Edit(EditTool::Select);
                     }
                 }
 
                 if player_entity.pick.is_some() {
                     if keys.pressed(KeyCode::Escape) || keys.pressed(KeyCode::Q) {
-                        *edit_mode = EditMode::Edit(EditTool::Select);
+                        *edit_mode = EditContext::Edit(EditTool::Select);
                     } else if keys.pressed(KeyCode::T) {
-                        *edit_mode = EditMode::Edit(EditTool::Translate);
+                        *edit_mode = EditContext::Edit(EditTool::Translate);
                     } else if keys.pressed(KeyCode::S) {
-                        *edit_mode = EditMode::Edit(EditTool::Scale);
+                        *edit_mode = EditContext::Edit(EditTool::Scale);
                     }
                 }
 
@@ -412,17 +413,17 @@ fn handle_user_input(
                 }
             }
 
-            EditMode::Spawn(map_object) => {
+            EditContext::Spawn(map_object) => {
                 if buttons.just_pressed(MouseButton::Left) {
                     match map_object {
                         MapObject::GearSimple => {
                             add_gear(&mut commands, &game_assets, &image_assets, "gear_simple_512", world_position, 1.0, -0.5);
-                            *edit_mode = EditMode::Edit(EditTool::Select);
+                            *edit_mode = EditContext::Edit(EditTool::Select);
                         }
 
                         MapObject::GearSorting => {
                             add_gear(&mut commands, &game_assets, &image_assets, "gear_sorting_512", world_position, 1.0, -0.5);
-                            *edit_mode = EditMode::Edit(EditTool::Select);
+                            *edit_mode = EditContext::Edit(EditTool::Select);
                         }
                     }
                 }
@@ -439,7 +440,7 @@ fn handle_user_input(
 fn spawn_entity (
     mut commands: Commands,
     mut egui_contexts: EguiContexts,
-    mut edit_mode: ResMut<EditMode>,
+    mut edit_mode: ResMut<EditContext>,
     ){
 
     egui::Window::new("spawn").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
@@ -447,7 +448,7 @@ fn spawn_entity (
             ui.label("Gear simple");
             if ui.button("Spawn").clicked() {
                 info!("Gear simple spawned");
-                *edit_mode = EditMode::Spawn(MapObject::GearSimple);
+                *edit_mode = EditContext::Spawn(MapObject::GearSimple);
             }
         });
 
@@ -455,7 +456,7 @@ fn spawn_entity (
             ui.label("Gear sorting");
             if ui.button("Spawn").clicked() {
                 info!("Gear sorting spawned");
-                *edit_mode = EditMode::Spawn(MapObject::GearSorting);
+                *edit_mode = EditContext::Spawn(MapObject::GearSorting);
             }
         });
 
