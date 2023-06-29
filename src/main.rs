@@ -52,12 +52,16 @@ struct GateZundamon {size: Vec2, position: Vec2, remain: i32, prob: f32 }
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 struct PadVelocity {size: Vec2, position: Vec2, velocity: Vec2}
 
+#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+struct Shredder {scale: f32, polyline: Vec<Vec2>, target_point: usize, speed: f32}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveContainer {
     gear_simple: Vec<GearSimple>,
     gear_sorting: Vec<GearSorting>,
     gate_zundamon: Vec<GateZundamon>,
     pad_velocity: Vec<PadVelocity>,
+    shredder: Vec<Shredder>,
 }
 
 impl SaveContainer {
@@ -67,6 +71,7 @@ impl SaveContainer {
             gear_sorting: Vec::new(),
             gate_zundamon: Vec::new(),
             pad_velocity: Vec::new(),
+            shredder: Vec::new(),
         }
     }
 }
@@ -91,7 +96,7 @@ enum MapObject {
     GearSorting,
     GateZundamon,
     PadVelocity(Option<Vec2>),
-    //Tracker(vec<Vec2>)
+    Shredder(Vec<Entity>, Vec<Vec2>),
 }
 
 #[derive(Resource, Reflect, Clone, PartialEq, Debug, InspectorOptions)]
@@ -123,11 +128,11 @@ fn main() {
         }))
         .add_plugin(EguiPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .insert_resource(GameAsset::default())
+        .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
         //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
         //.add_plugin(RapierDebugRenderPlugin::default())
-        .insert_resource(GameAsset::default())
-        .insert_resource(EditContext::Edit(None, EditTool::Select))
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
 
@@ -144,6 +149,10 @@ fn main() {
         .register_type::<PadVelocity>()
         .add_system(pad_velocity_system.in_set(OnUpdate(AppState::Game)))
 
+        .register_type::<Shredder>()
+        .add_system(shredder_move_system.in_set(OnUpdate(AppState::Game)))
+        .add_system(shredder_system.in_set(OnUpdate(AppState::Game)))
+
         .add_event::<SaveWorldEvent>()
         .add_system(save_world)
         .add_event::<LoadWorldEvent>()
@@ -156,6 +165,7 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
               gear_sorting_q: Query<(&Velocity, &Transform, &GearSorting)>,
               gate_zundamon_q: Query<(&Transform, &GateZundamon)>,
               pad_velocity_q: Query<(&Transform, &PadVelocity)>,
+              shredder_q: Query<(&Transform, &Shredder)>,
               ) {
     let mut save_container = SaveContainer::new();
 
@@ -165,7 +175,7 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
 
         for (v, t, e) in gear_simple_q.iter() {
             let mut e = e.clone();
-            e.scale = t.scale.truncate().distance(Vec2 { x: 0.0, y: 0.0 });
+            e.scale = t.scale.truncate().x;
             e.position = t.translation.truncate();
             e.anglevel = v.angvel;
             save_container.gear_simple.push(e.clone());
@@ -173,7 +183,7 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
 
         for (v, t, e) in gear_sorting_q.iter() {
             let mut e = e.clone();
-            e.scale = t.scale.truncate().distance(Vec2 { x: 0.0, y: 0.0 });
+            e.scale = t.scale.truncate().x;
             e.position = t.translation.truncate();
             e.anglevel = v.angvel;
             save_container.gear_sorting.push(e.clone());
@@ -191,6 +201,12 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
             e.size = e.size * t.scale.truncate();
             e.position = t.translation.truncate();
             save_container.pad_velocity.push(e.clone());
+        }
+
+        for (t, e) in shredder_q.iter() {
+            let mut e = e.clone();
+            e.scale = t.scale.truncate().x;
+            save_container.shredder.push(e);
         }
 
         std::fs::write(file, serde_json::to_string(&save_container).unwrap()).unwrap();
@@ -228,6 +244,10 @@ fn load_world(
             add_pad_velocity(&mut commands, &game_assets, e);
         }
 
+        for e in save_container.shredder {
+            add_shredder(&mut commands, &game_assets, &image_assets, e);
+        }
+
         //println!("{:?}", save_container);
     }
 }
@@ -248,9 +268,9 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
-        (include_bytes!("../assets/map_element/gear1024.png").as_slice(), "gear1024_handle"),
         (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
         (include_bytes!("../assets/map_element/gear_sorting_512.png").as_slice(), "gear_sorting_512"),
+        (include_bytes!("../assets/map_element/shredder_512.png").as_slice(), "shredder_512_handle"),
         (include_bytes!("../assets/map_element/pad_velocity.png").as_slice(), "pad_velocity_handle"),
     ];
 
@@ -296,7 +316,7 @@ fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: V
         .spawn(Ball)
         .insert(RigidBody::Dynamic)
         .insert(Restitution::coefficient(0.7))
-        .insert(Friction::coefficient(0.01))
+        .insert(Friction::coefficient(0.05))
         .insert(collider)
         .insert(SpriteBundle {
                     sprite: Sprite {
@@ -380,6 +400,63 @@ fn add_pad_velocity(commands: &mut Commands,
     return entity.id();
 }
 
+fn add_shredder(commands: &mut Commands,
+                    game_assets: &Res<GameAsset>,
+                    image_assets: &Res<Assets<Image>>,
+                    shredder: Shredder) -> Entity {
+    let sprite_handle = game_assets.image_handles.get("shredder_512_handle").unwrap();
+    //let sprite_image = image_assets.get(sprite_handle).unwrap();
+    //let colliders = multi_polyline_collider_translated(sprite_image);
+
+    let mut entity = commands.spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    ..default()
+                },
+                texture: sprite_handle.clone(),
+                ..default()
+            },
+        ));
+
+    entity
+        .insert(Interaction::default())
+        .insert(RigidBody::KinematicVelocityBased)
+        .insert(Velocity {
+            linvel: Vec2::new(0.0, 0.0),
+            angvel: -2.0,
+        });
+
+    entity.insert(Collider::ball(512.0 / 2.0));
+    //for collider in colliders {
+    //    entity.with_children(|children| {
+    //        children.spawn(collider)
+    //            .insert(TransformBundle {
+    //                local: Transform {
+    //                    ..Default::default()
+    //                },
+    //                ..default()
+    //            })
+    //        ;
+    //    });
+    //}
+
+    entity.insert(TransformBundle {
+                local: Transform {
+                    translation: Vec3::new(shredder.polyline[0].x, shredder.polyline[0].y, 0.0),
+                    scale: shredder.scale * Vec3::ONE,
+                    ..Default::default()
+                },
+                ..default()
+                },
+        );
+
+    entity.insert(BBSize{x: 512.0, y: 512.0});
+    entity.insert(shredder);
+
+    return entity.id();
+
+}
+
 fn add_gear_simple(commands: &mut Commands,
             game_assets: &Res<GameAsset>,
             image_assets: &Res<Assets<Image>>,
@@ -457,6 +534,7 @@ fn add_gear(commands: &mut Commands,
         });
     }
 
+    println!("scale: {:?}", r * Vec3::ONE);
     entity.insert(TransformBundle {
                 local: Transform {
                     translation: Vec3::new(pos.x, pos.y, 0.0),
@@ -508,22 +586,8 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
 }
 
 fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_assets: Res<Assets<Image>>) {
-
     /* Create the ground. */
-    //add_white_wall(&mut commands, Vec2::new(400.0, 10.0), Vec2::new(0.0, -400.0));
-    //add_white_wall(&mut commands, Vec2::new(10.0, 200.0), Vec2::new(200.0, -300.0));
-    //add_white_wall(&mut commands, Vec2::new(10.0, 200.0), Vec2::new(-200.0, -300.0));
     add_map(&mut commands, &game_assets, &image_assets);
-
-    /* Create the bouncing ball. */
-    //let mut rng = rand::thread_rng();
-    //for i in 0..20 {
-    //    let x = rng.gen_range(0.0..1200.0) - 600.0;
-    //    let y = 600.0 + rng.gen_range(0.0..100.0);
-   //    let r = BALL_SIZE;
-
-    //    add_ball_random(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), r, Vec2::new(0.0, 0.0));
-    //}
 }
 
 
@@ -592,6 +656,37 @@ fn pad_velocity_system(
         });
 
     }
+}
+
+fn shredder_move_system(
+    mut shredder_q: Query<(&mut Transform, &mut Velocity, &mut BBSize, &mut Shredder)>,
+) {
+    for (mut t, mut v, _, mut shredder) in shredder_q.iter_mut() {
+        if shredder.target_point < shredder.polyline.len() - 1 { 
+            let target_pos = shredder.polyline[shredder.target_point];
+            let distance = t.translation.truncate().distance(target_pos);
+            let dir = (target_pos - t.translation.truncate()) / distance;
+
+            let distance_thresh = 10.0;
+            if distance < distance_thresh {
+                shredder.target_point += 1;
+            } else {
+                v.linvel = dir * shredder.speed;
+            }
+
+        } else {
+            v.linvel = Vec2::ZERO;
+        }
+
+        println!("{:?}", v.linvel);
+    }
+}
+
+fn shredder_system(
+    rapier_context: Res<RapierContext>,
+    mut ball_q: Query<(&mut Velocity, With<Ball>)>,
+    shredder_q: Query<(&Transform, &BBSize, &Shredder)>,
+) {
 }
 
 
@@ -677,6 +772,7 @@ fn handle_user_input(
                                 let pos = Vec2::new(transform.translation.x, transform.translation.y);
                                 let r = pos.distance(world_position);
                                 let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+                                println!("scale: {:?}", Vec3::ONE * scale);
                                 transform.scale = Vec3::ONE * scale.max(0.1);
                             }
                         }
@@ -698,57 +794,107 @@ fn handle_user_input(
             }
 
             EditContext::Spawn(map_object) => {
-                if buttons.just_pressed(MouseButton::Left) {
                     match map_object {
                         MapObject::GearSimple => {
-                            let gs = GearSimple {
-                                scale: 1.0, position: world_position, anglevel: -0.5
-                            };
-                            let entity = add_gear_simple(&mut commands, &game_assets, &image_assets, gs);
-                            *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
-                        }
-
-                        MapObject::GearSorting => {
-                            let gs = GearSorting {
-                                scale: 1.0, position: world_position, anglevel: -0.5
-                            };
-                            let entity = add_gear_sorting(&mut commands, &game_assets, &image_assets, gs);
-                            *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
-                        }
-
-                        MapObject::GateZundamon => {
-                            let gz = GateZundamon {
-                                        size: Vec2::new(128.0, 32.0),
-                                        position: world_position,
-                                        remain: 100,
-                                        prob: 0.1
-                            };
-                            let entity = add_zundamon_gate(&mut commands, gz);
-                            *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
-                        }
-
-                        MapObject::PadVelocity(origin) => {
-                            if origin.is_none() {
-                                *edit_context = EditContext::Spawn(MapObject::PadVelocity(Some(world_position)));
-                            } else {
-                                let origin = origin.unwrap();
-                                let dir = (world_position - origin).normalize();
-                                let vel = dir * 300.0;
-                                let pd = PadVelocity {
-                                            position: origin,
-                                            size: Vec2::new(32.0, 32.0),
-                                            velocity: vel
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let gs = GearSimple {
+                                    scale: 1.0, position: world_position, anglevel: -0.5
                                 };
-                                let entity = add_pad_velocity(&mut commands,
-                                                              &game_assets,
-                                                              pd);
+                                let entity = add_gear_simple(&mut commands, &game_assets, &image_assets, gs);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
 
+                        MapObject::GearSorting => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let gs = GearSorting {
+                                    scale: 1.0, position: world_position, anglevel: -0.5
+                                };
+                                let entity = add_gear_sorting(&mut commands, &game_assets, &image_assets, gs);
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
+                        MapObject::GateZundamon => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let gz = GateZundamon {
+                                    size: Vec2::new(128.0, 32.0),
+                                    position: world_position,
+                                    remain: 100,
+                                    prob: 0.1
+                                };
+                                let entity = add_zundamon_gate(&mut commands, gz);
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
+                        MapObject::PadVelocity(origin) => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                if origin.is_none() {
+                                    *edit_context = EditContext::Spawn(MapObject::PadVelocity(Some(world_position)));
+                                } else {
+                                    let origin = origin.unwrap();
+                                    let dir = (world_position - origin).normalize();
+                                    let vel = dir * 300.0;
+                                    let pd = PadVelocity {
+                                        position: origin,
+                                        size: Vec2::new(32.0, 32.0),
+                                        velocity: vel
+                                    };
+                                    let entity = add_pad_velocity(&mut commands,
+                                                                  &game_assets,
+                                                                  pd);
+                                    *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                }
+                            }
+                        }
+
+                        MapObject::Shredder(entities, polyline) => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let mut entities: Vec<Entity> = entities.to_vec();
+                                let mut polyline: Vec<Vec2> = polyline.to_vec();
+
+                                let entity = commands
+                                    .spawn(SpriteBundle {
+                                            sprite: Sprite {
+                                                color: Color::BLACK,
+                                                custom_size: Some(Vec2::new(8.0, 8.0)),
+                                                ..Default::default()
+                                            },
+                                            ..Default::default()
+                                        })
+                                    .insert(TransformBundle::from(Transform::from_translation(Vec3::from((world_position, 0.0)))))
+                                    .insert(BBSize{x: 8.0, y: 8.0})
+                                    .id();
+
+                                polyline.push(world_position);
+                                entities.push(entity);
+                                *edit_context = EditContext::Spawn(MapObject::Shredder(entities, polyline));
+
+                            } else if buttons.just_pressed(MouseButton::Right) {
+                                for e in entities {
+                                    commands.entity(e).despawn();
+                                }
+
+                                if polyline.len() > 0 {
+                                    let shredder = Shredder {
+                                        scale: 1.0,
+                                        polyline,
+                                        target_point: 0,
+                                        speed: 100.0,
+                                    };
+                                    let entity = add_shredder(&mut commands,
+                                                                  &game_assets,
+                                                                  &image_assets,
+                                                                  shredder);
+                                    *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                }
+                            }
+
+                        }
+
                         _ => {}
                     }
-                }
             }
         }
     }
@@ -792,6 +938,13 @@ fn spawn_map_object (
             }
         });
 
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Shredder");
+            if ui.button("Spawn").clicked() {
+                info!("Shredder spawned");
+                *edit_mode = EditContext::Spawn(MapObject::Shredder(Vec::new(), Vec::new()));
+            }
+        });
     });
 
 }
