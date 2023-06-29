@@ -426,7 +426,7 @@ fn add_shredder(commands: &mut Commands,
             angvel: -2.0,
         });
 
-    entity.insert(Collider::ball(512.0 / 2.0));
+    //entity.insert(Collider::ball(512.0 / 2.0));
     //for collider in colliders {
     //    entity.with_children(|children| {
     //        children.spawn(collider)
@@ -534,7 +534,6 @@ fn add_gear(commands: &mut Commands,
         });
     }
 
-    println!("scale: {:?}", r * Vec3::ONE);
     entity.insert(TransformBundle {
                 local: Transform {
                     translation: Vec3::new(pos.x, pos.y, 0.0),
@@ -568,7 +567,7 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
     let mut entity = commands.spawn((
             SpriteBundle {
                 texture: sprite_handle.clone(),
-                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                transform: Transform::from_xyz(0.0, 0.0, 0.5),
                 ..default()
             },
             Interaction::default()
@@ -683,10 +682,25 @@ fn shredder_move_system(
 }
 
 fn shredder_system(
+    mut commands: Commands,
     rapier_context: Res<RapierContext>,
-    mut ball_q: Query<(&mut Velocity, With<Ball>)>,
+    ball_q: Query<(Entity, With<Ball>)>,
     shredder_q: Query<(&Transform, &BBSize, &Shredder)>,
 ) {
+    for (transform, bbsize, pad_velocity) in shredder_q.iter(){
+        let r = bbsize.x / 2.0 * transform.scale.truncate().x * 0.9;
+        let shape = Collider::ball(r);
+        let shape_pos = transform.translation.truncate();
+        let shape_rot = 0.0;
+        let filter = QueryFilter::only_dynamic();
+
+        rapier_context.intersections_with_shape(
+            shape_pos, shape_rot, &shape, filter, |entity| {
+                commands.entity(entity).despawn();
+                true // Return `false` instead if we want to stop searching for other colliders that contain this point.
+        });
+
+    }
 }
 
 
