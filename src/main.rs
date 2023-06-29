@@ -2,7 +2,7 @@
 use serde::{Serialize, Deserialize};
 
 use bevy::prelude::*;
-use bevy::window::{PrimaryWindow, WindowMode};
+use bevy::window::PrimaryWindow;
 use bevy::render::texture::{ImageType, CompressedImageFormats};
 use bevy::sprite::collide_aabb::collide;
 
@@ -11,9 +11,10 @@ use bevy_rapier_collider_gen::*;
 
 use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_inspector_egui::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
-use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+
+// use bevy_inspector_egui::quick::WorldInspectorPlugin;
+// use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
+// use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
 use std::collections::HashMap;
 use rand::prelude::*;
@@ -82,7 +83,7 @@ enum EditTool { #[default] Select,
 struct SaveWorldEvent(String);
 struct LoadWorldEvent(String);
 
-#[derive(Resource, Reflect, FromReflect, Clone, Copy, PartialEq, Debug, Default, InspectorOptions)]
+#[derive(Resource, Reflect, FromReflect, Clone, PartialEq, Debug, Default, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
 enum MapObject {
     #[default]None,
@@ -90,9 +91,10 @@ enum MapObject {
     GearSorting,
     GateZundamon,
     PadVelocity(Option<Vec2>),
+    //Tracker(vec<Vec2>)
 }
 
-#[derive(Resource, Reflect, Clone, Copy, PartialEq, Debug, InspectorOptions)]
+#[derive(Resource, Reflect, Clone, PartialEq, Debug, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
 enum EditContext {
     Edit(Option<Entity>, EditTool),
@@ -107,10 +109,6 @@ impl Default for EditContext {
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
-
-fn squeeze(vec3: Vec3) -> Vec2 {
-    Vec2::new(vec3.x, vec3.y)
-}
 
 fn main() {
     App::new()
@@ -283,14 +281,14 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
 //    }
 //}
 
-fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>, pos: Vec2, r: f32, vel: Vec2) {
+fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: f32, vel: Vec2) {
     let mut rng = rand::thread_rng();
     let image_vec = vec![ "zun1_handle", "zun2_handle", "zun3_handle" ];
     let random_index = rng.gen_range(0..image_vec.len());
     let random_image = image_vec[random_index];
 
     let sprite_handle = game_assets.image_handles.get(random_image).unwrap();
-    let sprite_image = image_assets.get(sprite_handle).unwrap();
+    //let sprite_image = image_assets.get(sprite_handle).unwrap();
     //let collider = single_convex_hull_collider_translated(sprite_image).unwrap();
     let collider = Collider::ball(r);
 
@@ -323,19 +321,6 @@ fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, image_
     ;
 }
 
-//fn add_white_wall(commands: &mut Commands, size: Vec2, pos: Vec2) {
-//    commands
-//        .spawn(SpriteBundle {
-//                sprite: Sprite {
-//                    color: Color::WHITE,
-//                    custom_size: Some(Vec2::new(size.x, size.y)),
-//                    ..Default::default()
-//                },
-//                ..Default::default()
-//            })
-//        .insert(Collider::cuboid(size.x / 2.0, size.y / 2.0))
-//        .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)));
-//}
 
 fn add_zundamon_gate(commands: &mut Commands, gate_zundamon: GateZundamon) -> Entity {
     let size = gate_zundamon.size;
@@ -513,7 +498,8 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
 
     for collider in colliders {
         entity.with_children(|children| {
-            children.spawn(collider);
+            children.spawn(collider)
+                .insert(Friction::coefficient(0.01));
         });
     }
 
@@ -563,23 +549,21 @@ fn remove_outside_system(
 fn gate_zundamon_system(
     mut commands: Commands,
     game_assets: Res<GameAsset>,
-    image_assets: Res<Assets<Image>>,
     mut query: Query<(&Transform, &BBSize, &mut GateZundamon)>,
 ) {
     let mut rng = rand::thread_rng();
 
     for (transform, bbsize, mut gate_zundamon) in query.iter_mut() {
         if gate_zundamon.remain > 0 {
-            let mut rng = rand::thread_rng();
             if rng.gen::<f32>() < gate_zundamon.prob {
-                let size = Vec2::new(bbsize.x, bbsize.y) * squeeze(transform.scale);
-                let pos_max = squeeze(transform.translation) + (size / 2.0);
-                let pos_min = squeeze(transform.translation) - (size / 2.0);
+                let size = Vec2::new(bbsize.x, bbsize.y) * transform.scale.truncate();
+                let pos_max = transform.translation.truncate() + (size / 2.0);
+                let pos_min = transform.translation.truncate() - (size / 2.0);
 
                 let x = rng.gen_range(pos_min.x .. pos_max.x);
                 let y = rng.gen_range(pos_min.y .. pos_max.y);
 
-                add_ball_random(&mut commands, &game_assets, &image_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
+                add_ball_random(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
                 gate_zundamon.remain -= 1;
             }
         }
@@ -593,9 +577,9 @@ fn pad_velocity_system(
     pad_velocity_q: Query<(&Transform, &BBSize, &PadVelocity)>,
 ) {
     for (transform, bbsize, pad_velocity) in pad_velocity_q.iter(){
-        let cuboid_size = Vec2::new(bbsize.x, bbsize.y) / 2.0 * squeeze(transform.scale);
+        let cuboid_size = Vec2::new(bbsize.x, bbsize.y) / 2.0 * transform.scale.truncate();
         let shape = Collider::cuboid(cuboid_size.x, cuboid_size.y);
-        let shape_pos = squeeze(transform.translation);
+        let shape_pos = transform.translation.truncate();
         let (shape_rot, _, _) = transform.rotation.to_euler(EulerRot::ZXY);
         let filter = QueryFilter::only_dynamic();
 
@@ -637,7 +621,7 @@ fn handle_user_input(
         .and_then(|cursor| camera.viewport_to_world(camera_transform, cursor))
         .map(|ray| ray.origin.truncate())
     {
-        match *edit_context {
+        match edit_context.clone() {
             EditContext::Edit(pick, edit_tool) => {
                 if buttons.just_pressed(MouseButton::Left) {
                     for (entity, transform, size) in transform_q.iter() {
@@ -692,8 +676,8 @@ fn handle_user_input(
                             if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
                                 let pos = Vec2::new(transform.translation.x, transform.translation.y);
                                 let r = pos.distance(world_position);
-                                let scale = r / Vec2::new(0.0, 0.0).distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
-                                transform.scale = Vec3::ONE * scale;
+                                let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+                                transform.scale = Vec3::ONE * scale.max(0.1);
                             }
                         }
                     }
@@ -701,10 +685,10 @@ fn handle_user_input(
                     EditTool::ScaleDistort => {
                         if let Some(entity) = pick {
                             if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
-                                let pos = squeeze(transform.translation);
+                                let pos = transform.translation.truncate();
                                 let diff = world_position - pos;
-                                let scale = diff / Vec2::new(0.0, 0.0).distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
-                                transform.scale = Vec3::new(scale.x.abs(), scale.y.abs(), 1.0);
+                                let scale = diff / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+                                transform.scale = Vec3::new(scale.x.abs().max(0.1), scale.y.abs().max(0.1), 1.0);
                             }
                         }
                     }
@@ -771,7 +755,6 @@ fn handle_user_input(
 }
 
 fn spawn_map_object (
-    mut commands: Commands,
     mut egui_contexts: EguiContexts,
     mut edit_mode: ResMut<EditContext>,
     ){
@@ -814,7 +797,6 @@ fn spawn_map_object (
 }
 
 fn game_mode_select (
-    mut commands: Commands,
     mut save_world_ew: EventWriter<SaveWorldEvent>,
     mut load_world_ew: EventWriter<LoadWorldEvent>,
     mut egui_contexts: EguiContexts,
