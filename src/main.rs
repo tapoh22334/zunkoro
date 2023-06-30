@@ -16,49 +16,36 @@ use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
-use std::collections::HashMap;
-use rand::prelude::*;
 
-#[derive(Component, Resource, Default, Debug)]
-pub struct GameAsset {
-    pub image_handles: HashMap<String, Handle<Image>>,
-}
+mod cmp_gate_zundamon;
+use crate::cmp_gate_zundamon::GateZundamon;
 
-#[derive(Component)]
-struct FuseTime {
-    timer: Timer,
-}
+mod cmp_bbsize;
+use crate::cmp_bbsize::BBSize;
+
+mod cmp_fuse_time;
+
+mod cmp_game_asset;
+use crate::cmp_game_asset::GameAsset;
+
+mod cmp_ball;
+use crate::cmp_ball::Ball;
+
+mod cmp_gear;
+use crate::cmp_gear::GearSimple;
+use crate::cmp_gear::GearSorting;
+
+mod cmp_pad_velocity;
+use crate::cmp_pad_velocity::PadVelocity;
+
+mod cmp_shredder;
+use crate::cmp_shredder::Shredder;
+
+//use crate::cmp_gate_zundamon;
 
 /// Used to help identify our main camera
 #[derive(Component)]
 struct MainCamera;
-
-// `InspectorOptions` are completely optional
-#[derive(Component, Reflect, Resource, Default, InspectorOptions)]
-#[reflect(Resource, InspectorOptions)]
-struct Player { pick: Option<Entity> }
-
-#[derive(Component)]
-struct Ball;
-const BALL_SIZE: f32 = 8.0;
-
-#[derive(Component)]
-struct BBSize { x: f32, y: f32 }
-
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-struct GearSimple {scale: f32, position: Vec2, anglevel: f32}
-
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-struct GearSorting {scale: f32, position: Vec2, anglevel: f32}
-
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-struct GateZundamon {size: Vec2, position: Vec2, remain: i32, prob: f32 }
-
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-struct PadVelocity {size: Vec2, position: Vec2, velocity: Vec2}
-
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-struct Shredder {scale: f32, polyline: Vec<Vec2>, target_point: usize, speed: f32, time_offset: f32}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveContainer {
@@ -149,14 +136,14 @@ fn main() {
         .add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZundamon>()
-        .add_system(gate_zundamon_system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_gate_zundamon::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<PadVelocity>()
-        .add_system(pad_velocity_system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_pad_velocity::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<Shredder>()
-        .add_system(shredder_move_system.in_set(OnUpdate(AppState::Game)))
-        .add_system(shredder_system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_shredder::system_move.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_shredder::system_kill.in_set(OnUpdate(AppState::Game)))
 
         .add_event::<SaveWorldEvent>()
         .add_system(save_world)
@@ -234,23 +221,23 @@ fn load_world(
         let save_container: SaveContainer = serde_json::from_str(&json_str).unwrap();
 
         for e in save_container.gear_simple {
-            add_gear_simple(&mut commands, &game_assets, &image_assets, e);
+            cmp_gear::add_simple(&mut commands, &game_assets, &image_assets, e);
         }
 
         for e in save_container.gear_sorting {
-            add_gear_sorting(&mut commands, &game_assets, &image_assets, e);
+            cmp_gear::add_sorting(&mut commands, &game_assets, &image_assets, e);
         }
 
         for e in save_container.gate_zundamon {
-            add_zundamon_gate(&mut commands, e);
+            cmp_gate_zundamon::add(&mut commands, e);
         }
 
         for e in save_container.pad_velocity {
-            add_pad_velocity(&mut commands, &game_assets, e);
+            cmp_pad_velocity::add(&mut commands, &game_assets, e);
         }
 
         for e in save_container.shredder {
-            add_shredder(&mut commands, &game_assets, &image_assets, e);
+            cmp_shredder::add(&mut commands, &game_assets, &image_assets, e);
         }
 
         //println!("{:?}", save_container);
@@ -285,277 +272,6 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
 }
 
 
-//fn inspector_ui(player_q: Query<&mut Player>, world: &mut World) {
-//    let mut player_entity = player_q.single_mut();
-//
-//    let mut egui_context = world
-//        .query_filtered::<&mut EguiContext, With<PrimaryWindow>>()
-//        .single(world)
-//        .clone();
-//
-//    if let Some(entity) = player_entity.pick {
-//        egui::SidePanel::right("inspector")
-//            .default_width(250.0)
-//            .show(egui_context.get_mut(), |ui| {
-//                egui::ScrollArea::vertical().show(ui, |ui| {
-//                    ui.heading("Inspector");
-//                    bevy_inspector_egui::bevy_inspector::ui_for_entity(world, entity, ui);
-//                    ui.allocate_space(ui.available_size());
-//                });
-//            });
-//    }
-//}
-
-fn add_ball_random(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: f32, vel: Vec2) {
-    let mut rng = rand::thread_rng();
-    let image_vec = vec![ "zun1_handle", "zun2_handle", "zun3_handle" ];
-    let random_index = rng.gen_range(0..image_vec.len());
-    let random_image = image_vec[random_index];
-
-    let sprite_handle = game_assets.image_handles.get(random_image).unwrap();
-    //let sprite_image = image_assets.get(sprite_handle).unwrap();
-    //let collider = single_convex_hull_collider_translated(sprite_image).unwrap();
-    let collider = Collider::ball(r);
-
-    commands
-        .spawn(Ball)
-        .insert(RigidBody::Dynamic)
-        .insert(Restitution::coefficient(0.7))
-        .insert(Friction::coefficient(0.05))
-        .insert(collider)
-        .insert(SpriteBundle {
-                    sprite: Sprite {
-                        custom_size: Some(Vec2::ONE * (r * 2.0)),
-                        ..default()
-                    },
-                    texture: sprite_handle.clone(),
-                    ..default()
-        })
-        .insert(TransformBundle {
-                    local: Transform {
-                                translation: Vec3::new(pos.x, pos.y, 1.0),
-                                //scale: Vec3::ONE / r,
-                                ..Default::default()
-                            },
-                    ..default()
-        })
-        .insert(Velocity {
-            linvel: vel,
-            angvel: 0.0,
-        })
-    ;
-}
-
-
-fn add_zundamon_gate(commands: &mut Commands, gate_zundamon: GateZundamon) -> Entity {
-    let size = gate_zundamon.size;
-    let pos = gate_zundamon.position;
-    let mut entity = commands
-        .spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::GREEN,
-                    custom_size: Some(Vec2::new(size.x, size.y)),
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-        // .insert(Collider::cuboid(size.x / 2.0, size.y / 2.0))
-
-    entity
-        .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)))
-        .insert(BBSize{x: size.x, y: size.y})
-        .insert(gate_zundamon);
-
-    return entity.id();
-}
-
-
-fn add_pad_velocity(commands: &mut Commands,
-                    game_assets: &Res<GameAsset>,
-                    pad_velocity: PadVelocity) -> Entity {
-    let size = pad_velocity.size;
-    let pos = pad_velocity.position;
-    let vel = pad_velocity.velocity;
-
-    let sprite_handle = game_assets.image_handles.get("pad_velocity_handle").unwrap();
-    let mut entity = commands
-        .spawn(SpriteBundle {
-                sprite: Sprite {
-                    custom_size: Some(Vec2::new(size.x, size.y)),
-                    ..Default::default()
-                },
-                texture: sprite_handle.clone(),
-                ..Default::default()
-            });
-        // .insert(Collider::cuboid(size.x / 2.0, size.y / 2.0))
-
-    let angle = Vec2::new(0.0, 1.0).angle_between(vel.normalize());
-    entity
-        .insert(TransformBundle {
-                local: Transform {
-                    translation: Vec3::new(pos.x, pos.y, 0.0),
-                    rotation: Quat::from_axis_angle(Vec3::new(0.0, 0.0, 1.0), angle),
-                    ..Default::default()
-                },
-                ..default()
-                })
-        .insert(BBSize{x: size.x, y: size.y})
-        .insert(pad_velocity);
-
-    return entity.id();
-}
-
-fn add_shredder(commands: &mut Commands,
-                    game_assets: &Res<GameAsset>,
-                    image_assets: &Res<Assets<Image>>,
-                    shredder: Shredder) -> Entity {
-    let sprite_handle = game_assets.image_handles.get("shredder_512_handle").unwrap();
-    //let sprite_image = image_assets.get(sprite_handle).unwrap();
-    //let colliders = multi_polyline_collider_translated(sprite_image);
-
-    let mut entity = commands.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    ..default()
-                },
-                texture: sprite_handle.clone(),
-                ..default()
-            },
-        ));
-
-    entity
-        .insert(Interaction::default())
-        .insert(RigidBody::KinematicVelocityBased)
-        .insert(Velocity {
-            linvel: Vec2::new(0.0, 0.0),
-            angvel: -2.0,
-        });
-
-    //entity.insert(Collider::ball(512.0 / 2.0));
-    //for collider in colliders {
-    //    entity.with_children(|children| {
-    //        children.spawn(collider)
-    //            .insert(TransformBundle {
-    //                local: Transform {
-    //                    ..Default::default()
-    //                },
-    //                ..default()
-    //            })
-    //        ;
-    //    });
-    //}
-
-    entity.insert(TransformBundle {
-                local: Transform {
-                    translation: Vec3::new(shredder.polyline[0].x, shredder.polyline[0].y, 0.0),
-                    scale: shredder.scale * Vec3::ONE,
-                    ..Default::default()
-                },
-                ..default()
-                },
-        );
-
-    entity.insert(BBSize{x: 512.0, y: 512.0});
-    entity.insert(FuseTime{timer: Timer::from_seconds(shredder.time_offset, TimerMode::Once)} );
-    entity.insert(shredder);
-
-    return entity.id();
-
-}
-
-fn add_gear_simple(commands: &mut Commands,
-            game_assets: &Res<GameAsset>,
-            image_assets: &Res<Assets<Image>>,
-            gear_simple: GearSimple) -> Entity {
-
-    let id = add_gear(commands,
-             game_assets,
-             image_assets,
-             "gear_simple_512",
-             gear_simple.position,
-             gear_simple.scale,
-             gear_simple.anglevel);
-
-    let id = commands.entity(id).insert(gear_simple).id();
-    return id;
-}
-
-fn add_gear_sorting(commands: &mut Commands,
-            game_assets: &Res<GameAsset>,
-            image_assets: &Res<Assets<Image>>,
-            gear_sorting: GearSorting) -> Entity {
-
-    let id = add_gear(commands,
-             game_assets,
-             image_assets,
-             "gear_sorting_512",
-             gear_sorting.position,
-             gear_sorting.scale,
-             gear_sorting.anglevel);
-
-    let id = commands.entity(id).insert(gear_sorting).id();
-    return id;
-}
-
-fn add_gear(commands: &mut Commands,
-            game_assets: &Res<GameAsset>,
-            image_assets: &Res<Assets<Image>>,
-            name: &str,
-            pos: Vec2,
-            r: f32,
-            anglevel: f32) -> Entity {
-    let sprite_handle = game_assets.image_handles.get(name).unwrap();
-    let sprite_image = image_assets.get(sprite_handle).unwrap();
-    let colliders = multi_polyline_collider_translated(sprite_image);
-
-    let mut entity = commands.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    ..default()
-                },
-                texture: sprite_handle.clone(),
-                ..default()
-            },
-        ));
-
-    entity
-        .insert(Interaction::default())
-        .insert(RigidBody::KinematicVelocityBased)
-        .insert(Restitution::coefficient(0.0))
-        .insert(Velocity {
-            linvel: Vec2::new(0.0, 0.0),
-            angvel: anglevel,
-        });
-
-    for collider in colliders {
-        entity.with_children(|children| {
-            children.spawn(collider)
-                .insert(TransformBundle {
-                    local: Transform {
-                        ..Default::default()
-                    },
-                    ..default()
-                })
-            ;
-        });
-    }
-
-    entity.insert(TransformBundle {
-                local: Transform {
-                    translation: Vec3::new(pos.x, pos.y, 0.0),
-                    scale: r * Vec3::ONE,
-                    ..Default::default()
-                },
-                ..default()
-                },
-        );
-
-    entity.insert(BBSize{x: 512.0, y: 512.0});
-
-    return entity.id();
-
-}
-
 fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
     let sprite_handle = game_assets.image_handles.get("map2_handle").unwrap();
     let sprite_image = image_assets.get(sprite_handle).unwrap();
@@ -586,7 +302,6 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
         });
     }
 
-    //add_gear(commands, &game_assets, &image_assets, "gear_simple_512", Vec2::new(0.0, 0.0), 1.0, -0.5);
 
 }
 
@@ -612,103 +327,6 @@ fn remove_outside_system(
         if window_position_x < 0.0 || window_position_x > window_width || window_position_y < 0.0 {
             commands.entity(entity).despawn();
         }
-    }
-}
-
-fn gate_zundamon_system(
-    mut commands: Commands,
-    game_assets: Res<GameAsset>,
-    mut query: Query<(&Transform, &BBSize, &mut GateZundamon)>,
-) {
-    let mut rng = rand::thread_rng();
-
-    for (transform, bbsize, mut gate_zundamon) in query.iter_mut() {
-        if gate_zundamon.remain > 0 {
-            if rng.gen::<f32>() < gate_zundamon.prob {
-                let size = Vec2::new(bbsize.x, bbsize.y) * transform.scale.truncate();
-                let pos_max = transform.translation.truncate() + (size / 2.0);
-                let pos_min = transform.translation.truncate() - (size / 2.0);
-
-                let x = rng.gen_range(pos_min.x .. pos_max.x);
-                let y = rng.gen_range(pos_min.y .. pos_max.y);
-
-                add_ball_random(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
-                gate_zundamon.remain -= 1;
-            }
-        }
-    }
-}
-
-
-fn pad_velocity_system(
-    rapier_context: Res<RapierContext>,
-    mut ball_q: Query<(&mut Velocity, With<Ball>)>,
-    pad_velocity_q: Query<(&Transform, &BBSize, &PadVelocity)>,
-) {
-    for (transform, bbsize, pad_velocity) in pad_velocity_q.iter(){
-        let cuboid_size = Vec2::new(bbsize.x, bbsize.y) / 2.0 * transform.scale.truncate();
-        let shape = Collider::cuboid(cuboid_size.x, cuboid_size.y);
-        let shape_pos = transform.translation.truncate();
-        let (shape_rot, _, _) = transform.rotation.to_euler(EulerRot::ZXY);
-        let filter = QueryFilter::only_dynamic();
-
-        rapier_context.intersections_with_shape(
-            shape_pos, shape_rot, &shape, filter, |entity| {
-                if let Ok(mut vel) = ball_q.get_mut(entity) {
-                    vel.0.linvel = pad_velocity.velocity;
-                }
-            true // Return `false` instead if we want to stop searching for other colliders that contain this point.
-        });
-
-    }
-}
-
-fn shredder_move_system(
-    time: Res<Time>,
-    mut shredder_q: Query<(&mut Transform, &mut Velocity, &mut BBSize, &mut FuseTime, &mut Shredder)>,
-) {
-    for (mut t, mut v, _, mut fuse_time, mut shredder) in shredder_q.iter_mut() {
-        fuse_time.timer.tick(time.delta());
-        if ! fuse_time.timer.finished() { continue; }
-
-        if shredder.target_point < shredder.polyline.len() - 1 { 
-            let target_pos = shredder.polyline[shredder.target_point];
-            let distance = t.translation.truncate().distance(target_pos);
-            let dir = (target_pos - t.translation.truncate()) / distance;
-
-            let distance_thresh = 10.0;
-            if distance < distance_thresh {
-                shredder.target_point += 1;
-            } else {
-                v.linvel = dir * shredder.speed;
-            }
-
-        } else {
-            v.linvel = Vec2::ZERO;
-        }
-
-    }
-}
-
-fn shredder_system(
-    mut commands: Commands,
-    rapier_context: Res<RapierContext>,
-    ball_q: Query<(Entity, With<Ball>)>,
-    shredder_q: Query<(&Transform, &BBSize, &Shredder)>,
-) {
-    for (transform, bbsize, pad_velocity) in shredder_q.iter(){
-        let r = bbsize.x / 2.0 * transform.scale.truncate().x * 0.9;
-        let shape = Collider::ball(r);
-        let shape_pos = transform.translation.truncate();
-        let shape_rot = 0.0;
-        let filter = QueryFilter::only_dynamic();
-
-        rapier_context.intersections_with_shape(
-            shape_pos, shape_rot, &shape, filter, |entity| {
-                commands.entity(entity).despawn();
-                true // Return `false` instead if we want to stop searching for other colliders that contain this point.
-        });
-
     }
 }
 
@@ -823,7 +441,7 @@ fn handle_user_input(
                                 let gs = GearSimple {
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
-                                let entity = add_gear_simple(&mut commands, &game_assets, &image_assets, gs);
+                                let entity = cmp_gear::add_simple(&mut commands, &game_assets, &image_assets, gs);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -833,7 +451,7 @@ fn handle_user_input(
                                 let gs = GearSorting {
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
-                                let entity = add_gear_sorting(&mut commands, &game_assets, &image_assets, gs);
+                                let entity = cmp_gear::add_sorting(&mut commands, &game_assets, &image_assets, gs);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -846,7 +464,7 @@ fn handle_user_input(
                                     remain: 100,
                                     prob: 0.3
                                 };
-                                let entity = add_zundamon_gate(&mut commands, gz);
+                                let entity = cmp_gate_zundamon::add(&mut commands, gz);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -864,7 +482,7 @@ fn handle_user_input(
                                         size: Vec2::new(32.0, 32.0),
                                         velocity: vel
                                     };
-                                    let entity = add_pad_velocity(&mut commands,
+                                    let entity = cmp_pad_velocity::add(&mut commands,
                                                                   &game_assets,
                                                                   pd);
                                     *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
@@ -907,7 +525,7 @@ fn handle_user_input(
                                         speed: 100.0,
                                         time_offset: 15.0,
                                     };
-                                    let entity = add_shredder(&mut commands,
+                                    let entity = cmp_shredder::add(&mut commands,
                                                                   &game_assets,
                                                                   &image_assets,
                                                                   shredder);
