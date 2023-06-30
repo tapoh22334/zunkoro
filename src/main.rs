@@ -12,9 +12,9 @@ use bevy_rapier_collider_gen::*;
 use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_inspector_egui::prelude::*;
 
-// use bevy_inspector_egui::quick::WorldInspectorPlugin;
-// use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
-// use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
+use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
 use std::collections::HashMap;
 use rand::prelude::*;
@@ -22,6 +22,11 @@ use rand::prelude::*;
 #[derive(Component, Resource, Default, Debug)]
 pub struct GameAsset {
     pub image_handles: HashMap<String, Handle<Image>>,
+}
+
+#[derive(Component)]
+struct FuseTime {
+    timer: Timer,
 }
 
 /// Used to help identify our main camera
@@ -35,7 +40,7 @@ struct Player { pick: Option<Entity> }
 
 #[derive(Component)]
 struct Ball;
-const BALL_SIZE: f32 = 10.0;
+const BALL_SIZE: f32 = 8.0;
 
 #[derive(Component)]
 struct BBSize { x: f32, y: f32 }
@@ -53,7 +58,7 @@ struct GateZundamon {size: Vec2, position: Vec2, remain: i32, prob: f32 }
 struct PadVelocity {size: Vec2, position: Vec2, velocity: Vec2}
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-struct Shredder {scale: f32, polyline: Vec<Vec2>, target_point: usize, speed: f32}
+struct Shredder {scale: f32, polyline: Vec<Vec2>, target_point: usize, speed: f32, time_offset: f32}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveContainer {
@@ -451,6 +456,7 @@ fn add_shredder(commands: &mut Commands,
         );
 
     entity.insert(BBSize{x: 512.0, y: 512.0});
+    entity.insert(FuseTime{timer: Timer::from_seconds(shredder.time_offset, TimerMode::Once)} );
     entity.insert(shredder);
 
     return entity.id();
@@ -658,9 +664,13 @@ fn pad_velocity_system(
 }
 
 fn shredder_move_system(
-    mut shredder_q: Query<(&mut Transform, &mut Velocity, &mut BBSize, &mut Shredder)>,
+    time: Res<Time>,
+    mut shredder_q: Query<(&mut Transform, &mut Velocity, &mut BBSize, &mut FuseTime, &mut Shredder)>,
 ) {
-    for (mut t, mut v, _, mut shredder) in shredder_q.iter_mut() {
+    for (mut t, mut v, _, mut fuse_time, mut shredder) in shredder_q.iter_mut() {
+        fuse_time.timer.tick(time.delta());
+        if ! fuse_time.timer.finished() { continue; }
+
         if shredder.target_point < shredder.polyline.len() - 1 { 
             let target_pos = shredder.polyline[shredder.target_point];
             let distance = t.translation.truncate().distance(target_pos);
@@ -677,7 +687,6 @@ fn shredder_move_system(
             v.linvel = Vec2::ZERO;
         }
 
-        println!("{:?}", v.linvel);
     }
 }
 
@@ -835,7 +844,7 @@ fn handle_user_input(
                                     size: Vec2::new(128.0, 32.0),
                                     position: world_position,
                                     remain: 100,
-                                    prob: 0.1
+                                    prob: 0.3
                                 };
                                 let entity = add_zundamon_gate(&mut commands, gz);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
@@ -896,6 +905,7 @@ fn handle_user_input(
                                         polyline,
                                         target_point: 0,
                                         speed: 100.0,
+                                        time_offset: 15.0,
                                     };
                                     let entity = add_shredder(&mut commands,
                                                                   &game_assets,
