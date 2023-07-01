@@ -5,6 +5,8 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::render::texture::{ImageType, CompressedImageFormats};
 use bevy::sprite::collide_aabb::collide;
+use bevy::audio::AudioLoader;
+use rodio::decoder::Decoder;
 
 use bevy_rapier2d::prelude::*;
 use bevy_rapier_collider_gen::*;
@@ -16,6 +18,7 @@ use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
+use bevy_prototype_lyon::prelude::*;
 
 mod cmp_gate_zundamon;
 use crate::cmp_gate_zundamon::GateZundamon;
@@ -40,6 +43,9 @@ use crate::cmp_pad_velocity::PadVelocity;
 
 mod cmp_shredder;
 use crate::cmp_shredder::Shredder;
+
+mod cmp_trajectory;
+use crate::cmp_trajectory::Trajectory;
 
 //use crate::cmp_gate_zundamon;
 
@@ -119,6 +125,7 @@ fn main() {
             ..default()
         }))
         .add_plugin(EguiPlugin)
+        .add_plugin(ShapePlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .insert_resource(GameAsset::default())
         .insert_resource(EditContext::Edit(None, EditTool::Select))
@@ -127,6 +134,7 @@ fn main() {
         //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
+        .add_system(setup_sounds.on_startup())
 
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
         .add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
@@ -134,6 +142,7 @@ fn main() {
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit)))
 
         .add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZundamon>()
         .add_system(cmp_gate_zundamon::system.in_set(OnUpdate(AppState::Game)))
@@ -144,6 +153,9 @@ fn main() {
         .register_type::<Shredder>()
         .add_system(cmp_shredder::system_move.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_shredder::system_kill.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<Trajectory>()
+        .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))
 
         .add_event::<SaveWorldEvent>()
         .add_system(save_world)
@@ -242,6 +254,22 @@ fn load_world(
 
         //println!("{:?}", save_container);
     }
+}
+
+fn load_audio(game_assets: &mut GameAsset, audio_assets: &mut Assets<AudioSource>, audio_bytes: &[u8], name: &str) {
+    let source = AudioSource { bytes: audio_bytes.into() };
+    let handle = audio_assets.add(source);
+    game_assets.audio_handles.insert(name.to_string(), handle);
+}
+
+fn setup_sounds(mut commands: Commands, mut game_assets: ResMut<GameAsset>, mut audio_assets: ResMut<Assets<AudioSource>>,) {
+    let audio_mappings = [
+        (include_bytes!("../assets/audio/zundamon_die1.wav").as_slice(), "zundamon_die1_handle"),
+    ];
+    for (path, handle) in audio_mappings.iter() {
+        load_audio(&mut game_assets, &mut audio_assets, path, handle);
+    }
+
 }
 
 fn load_image(game_assets: &mut GameAsset, image_assets: &mut Assets<Image>, image_bytes: &[u8], name: &str) {
@@ -456,7 +484,7 @@ fn handle_user_input(
                                 } else {
                                     let origin = origin.unwrap();
                                     let dir = (world_position - origin).normalize();
-                                    let vel = dir * 300.0;
+                                    let vel = dir * 200.0;
                                     let pd = PadVelocity {
                                         position: origin,
                                         size: Vec2::new(32.0, 32.0),

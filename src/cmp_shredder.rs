@@ -87,6 +87,8 @@ pub fn system_move(
 
 pub fn system_kill(
     mut commands: Commands,
+    audio: Res<Audio>,
+    game_assets: Res<GameAsset>,
     rapier_context: Res<RapierContext>,
     shredder_q: Query<(&Transform, &BBSize, &Shredder)>,
 ) {
@@ -100,6 +102,7 @@ pub fn system_kill(
         rapier_context.intersections_with_shape(
             shape_pos, shape_rot, &shape, filter, |entity| {
                 commands.entity(entity).despawn();
+                audio.play(game_assets.audio_handles.get("zundamon_die1_handle").unwrap().clone());
                 true // Return `false` instead if we want to stop searching for other colliders that contain this point.
         });
 
