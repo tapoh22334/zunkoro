@@ -36,7 +36,7 @@ pub fn add(commands: &mut Commands,
         .insert(RigidBody::KinematicVelocityBased)
         .insert(Velocity {
             linvel: Vec2::new(0.0, 0.0),
-            angvel: -2.0,
+            angvel: -3.0,
         });
 
     entity.insert(TransformBundle {

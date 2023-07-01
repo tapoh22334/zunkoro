@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-use crate::cmp_game_asset::GameAsset;
+use bevy::window::PrimaryWindow;
 use rand::prelude::*;
+
+use crate::cmp_game_asset::GameAsset;
 
 #[derive(Component)]
 pub struct Ball;
@@ -47,5 +49,23 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
 }
 
 
+pub fn system_remove(
+    mut commands: Commands,
+    windows_q: Query<&Window, With<PrimaryWindow>>,
+    query: Query<(Entity, &Transform), With<Ball>>,
+) {
+    let window = windows_q.single();
+    let window_width = window.width();
+    let window_height = window.height();
+
+    for (entity, position) in query.iter() {
+        let window_position_x = position.translation.x + window_width / 2.0;
+        let window_position_y = position.translation.y + window_height / 2.0;
+
+        if window_position_x < 0.0 || window_position_x > window_width || window_position_y < 0.0 {
+            commands.entity(entity).despawn();
+        }
+    }
+}
 
 

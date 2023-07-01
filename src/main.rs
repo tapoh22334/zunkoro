@@ -133,7 +133,7 @@ fn main() {
         .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit)))
 
-        .add_system(remove_outside_system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZundamon>()
         .add_system(cmp_gate_zundamon::system.in_set(OnUpdate(AppState::Game)))
@@ -298,7 +298,7 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
     for collider in colliders {
         entity.with_children(|children| {
             children.spawn(collider)
-                .insert(Friction::coefficient(0.01));
+                .insert(Friction::coefficient(0.001));
         });
     }
 
@@ -308,26 +308,6 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
 fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_assets: Res<Assets<Image>>) {
     /* Create the ground. */
     add_map(&mut commands, &game_assets, &image_assets);
-}
-
-
-fn remove_outside_system(
-    mut commands: Commands,
-    windows_q: Query<&Window, With<PrimaryWindow>>,
-    query: Query<(Entity, &Transform), With<Ball>>,
-) {
-    let window = windows_q.single();
-    let window_width = window.width();
-    let window_height = window.height();
-
-    for (entity, position) in query.iter() {
-        let window_position_x = position.translation.x + window_width / 2.0;
-        let window_position_y = position.translation.y + window_height / 2.0;
-
-        if window_position_x < 0.0 || window_position_x > window_width || window_position_y < 0.0 {
-            commands.entity(entity).despawn();
-        }
-    }
 }
 
 
@@ -462,7 +442,7 @@ fn handle_user_input(
                                     size: Vec2::new(128.0, 32.0),
                                     position: world_position,
                                     remain: 100,
-                                    prob: 0.3
+                                    prob: 0.5,
                                 };
                                 let entity = cmp_gate_zundamon::add(&mut commands, gz);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
