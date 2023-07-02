@@ -56,13 +56,7 @@ pub fn system(
             commands.entity(entity).despawn();
         } else {
             let alpha = fuse_time.timer.percent_left();
-            let color = Color::Rgba {
-                                red: 50.0,
-                                green: 205.0,
-                                blue: 50.0,
-                                alpha: alpha * MAX_ALPHA,
-                             };
-            stroke.color = color;
+            stroke.color = stroke.color.with_a(alpha * MAX_ALPHA);
         }
     }
 }

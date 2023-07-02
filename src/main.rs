@@ -34,6 +34,9 @@ use crate::cmp_game_asset::GameAsset;
 mod cmp_ball;
 use crate::cmp_ball::Ball;
 
+mod cmp_blood;
+use crate::cmp_blood::Blood;
+
 mod cmp_gear;
 use crate::cmp_gear::GearSimple;
 use crate::cmp_gear::GearSorting;
@@ -129,13 +132,15 @@ fn main() {
         }))
         .add_plugin(EguiPlugin)
         .add_plugin(ShapePlugin)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1000.0))
+        .add_plugin(bevy_framepace::FramepacePlugin)
         .insert_resource(GameAsset::default())
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
-        .add_plugin(ResourceInspectorPlugin::<EditContext>::default())
+        //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
         //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
+        .add_system(set_framerate.on_startup())
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
         .add_system(setup_fonts.on_startup())
@@ -149,6 +154,8 @@ fn main() {
 
         .add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
+
+        .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZundamon>()
         .add_system(cmp_gate_zundamon::system.in_set(OnUpdate(AppState::Game)))
@@ -171,6 +178,13 @@ fn main() {
         .add_event::<LoadWorldEvent>()
         .add_system(load_world)
         .run();
+}
+
+fn set_framerate(
+    mut settings: ResMut<bevy_framepace::FramepaceSettings>,
+) {
+    use bevy_framepace::Limiter;
+    settings.limiter = Limiter::from_framerate(60.0);
 }
 
 fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,

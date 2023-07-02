@@ -29,6 +29,7 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
         .insert(Restitution::coefficient(0.9))
         .insert(Friction::coefficient(0.05))
         .insert(collider)
+        .insert(CollisionGroups::new(Group::GROUP_1, Group::ALL))
         .insert(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(Vec2::ONE * (r * 2.0)),

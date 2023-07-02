@@ -41,6 +41,6 @@ pub fn system(
     let mut text = text_q.single_mut();
     let len = ball_q.iter().len();
 
-    let message = len.to_string() + "/100";
+    let message = len.to_string() + "/100 Zun";
     text.sections[0].value = message;
 }

@@ -3,9 +3,11 @@ use rand::prelude::*;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
+use crate::cmp_ball::Ball;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_fuse_time::FuseTime;
+use crate::cmp_blood;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct Shredder {
@@ -92,13 +94,15 @@ pub fn system_kill(
     game_assets: Res<GameAsset>,
     rapier_context: Res<RapierContext>,
     shredder_q: Query<(&Transform, &BBSize, &Shredder)>,
+    ball_q: Query<&Transform, With<Ball>>,
 ) {
     for (transform, bbsize, shredder) in shredder_q.iter(){
         let r = bbsize.x / 2.0 * transform.scale.truncate().x * 0.9;
         let shape = Collider::ball(r);
         let shape_pos = transform.translation.truncate();
         let shape_rot = 0.0;
-        let filter = QueryFilter::only_dynamic();
+        let filter = QueryFilter::only_dynamic()
+                        .groups(CollisionGroups::new(Group::GROUP_1, Group::GROUP_1));
         let mut rng = rand::thread_rng();
         let sv = vec![ "zundamon_die1_handle",
                         "zundamon_die2_handle",
@@ -112,6 +116,8 @@ pub fn system_kill(
 
         rapier_context.intersections_with_shape(
             shape_pos, shape_rot, &shape, filter, |entity| {
+                let blood_pos = ball_q.get(entity).unwrap().translation.truncate();
+                cmp_blood::add(&mut commands, blood_pos);
                 commands.entity(entity).despawn();
                 audio.play(game_assets.audio_handles.get(random_audio).unwrap().clone());
                 true // Return `false` instead if we want to stop searching for other colliders that contain this point.
