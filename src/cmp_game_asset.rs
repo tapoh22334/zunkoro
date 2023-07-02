@@ -6,5 +6,6 @@ use std::collections::HashMap;
 pub struct GameAsset {
     pub image_handles: HashMap<String, Handle<Image>>,
     pub audio_handles: HashMap<String, Handle<AudioSource>>,
+    pub font_handles: HashMap<String, Handle<Font>>,
 }
 

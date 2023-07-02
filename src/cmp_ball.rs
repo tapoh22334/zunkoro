@@ -26,7 +26,7 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
     commands
         .spawn(Ball {previous_position: None})
         .insert(RigidBody::Dynamic)
-        .insert(Restitution::coefficient(0.7))
+        .insert(Restitution::coefficient(0.9))
         .insert(Friction::coefficient(0.05))
         .insert(collider)
         .insert(SpriteBundle {

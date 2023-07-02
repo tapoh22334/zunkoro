@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use rand::prelude::*;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
@@ -98,11 +99,21 @@ pub fn system_kill(
         let shape_pos = transform.translation.truncate();
         let shape_rot = 0.0;
         let filter = QueryFilter::only_dynamic();
+        let mut rng = rand::thread_rng();
+        let sv = vec![ "zundamon_die1_handle",
+                        "zundamon_die2_handle",
+                        "zundamon_die3_handle",
+                        "zundamon_die4_handle",
+                        "zundamon_die5_handle",
+                        "zundamon_die6_handle",
+                        "zundamon_die7_handle",
+                     ];
+        let random_audio = sv[rng.gen_range(0..sv.len())];
 
         rapier_context.intersections_with_shape(
             shape_pos, shape_rot, &shape, filter, |entity| {
                 commands.entity(entity).despawn();
-                audio.play(game_assets.audio_handles.get("zundamon_die1_handle").unwrap().clone());
+                audio.play(game_assets.audio_handles.get(random_audio).unwrap().clone());
                 true // Return `false` instead if we want to stop searching for other colliders that contain this point.
         });
 

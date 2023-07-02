@@ -78,7 +78,7 @@ fn add_gear(commands: &mut Commands,
     entity
         .insert(Interaction::default())
         .insert(RigidBody::KinematicVelocityBased)
-        .insert(Restitution::coefficient(0.0))
+        .insert(Restitution::coefficient(0.5))
         .insert(Friction::coefficient(0.3))
         .insert(Velocity {
             linvel: Vec2::new(0.0, 0.0),

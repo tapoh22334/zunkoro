@@ -47,6 +47,9 @@ use crate::cmp_shredder::Shredder;
 mod cmp_trajectory;
 use crate::cmp_trajectory::Trajectory;
 
+mod cmp_zunda_counter;
+use crate::cmp_zunda_counter::Counter;
+
 //use crate::cmp_gate_zundamon;
 
 /// Used to help identify our main camera
@@ -130,16 +133,19 @@ fn main() {
         .insert_resource(GameAsset::default())
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
-        //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
+        .add_plugin(ResourceInspectorPlugin::<EditContext>::default())
         //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
+        .add_system(setup_fonts.on_startup())
 
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
         .add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
         .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit)))
+
+        .add_system(setup_ui.in_schedule(OnEnter(AppState::Game)))
 
         .add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
@@ -157,6 +163,9 @@ fn main() {
         .register_type::<Trajectory>()
         .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))
 
+        .add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
+
+        .add_system(move_camera)
         .add_event::<SaveWorldEvent>()
         .add_system(save_world)
         .add_event::<LoadWorldEvent>()
@@ -256,6 +265,22 @@ fn load_world(
     }
 }
 
+fn load_font(game_assets: &mut GameAsset, font_assets: &mut Assets<Font>, font_bytes: &[u8], name: &str) {
+    let source = Font::try_from_bytes(font_bytes.into()).unwrap();
+    let handle = font_assets.add(source);
+    game_assets.font_handles.insert(name.to_string(), handle);
+}
+
+fn setup_fonts(mut commands: Commands, mut game_assets: ResMut<GameAsset>, mut font_assets: ResMut<Assets<Font>>,) {
+    let font_mappings = [
+        (include_bytes!("../assets/font/FiraMono-Medium.ttf").as_slice(), "font1_handle"),
+    ];
+    for (path, handle) in font_mappings.iter() {
+        load_font(&mut game_assets, &mut font_assets, path, handle);
+    }
+
+}
+
 fn load_audio(game_assets: &mut GameAsset, audio_assets: &mut Assets<AudioSource>, audio_bytes: &[u8], name: &str) {
     let source = AudioSource { bytes: audio_bytes.into() };
     let handle = audio_assets.add(source);
@@ -265,6 +290,12 @@ fn load_audio(game_assets: &mut GameAsset, audio_assets: &mut Assets<AudioSource
 fn setup_sounds(mut commands: Commands, mut game_assets: ResMut<GameAsset>, mut audio_assets: ResMut<Assets<AudioSource>>,) {
     let audio_mappings = [
         (include_bytes!("../assets/audio/zundamon_die1.wav").as_slice(), "zundamon_die1_handle"),
+        (include_bytes!("../assets/audio/zundamon_die2.wav").as_slice(), "zundamon_die2_handle"),
+        (include_bytes!("../assets/audio/zundamon_die3.wav").as_slice(), "zundamon_die3_handle"),
+        (include_bytes!("../assets/audio/zundamon_die4.wav").as_slice(), "zundamon_die4_handle"),
+        (include_bytes!("../assets/audio/zundamon_die5.wav").as_slice(), "zundamon_die5_handle"),
+        (include_bytes!("../assets/audio/zundamon_die6.wav").as_slice(), "zundamon_die6_handle"),
+        (include_bytes!("../assets/audio/zundamon_die7.wav").as_slice(), "zundamon_die7_handle"),
     ];
     for (path, handle) in audio_mappings.iter() {
         load_audio(&mut game_assets, &mut audio_assets, path, handle);
@@ -288,9 +319,11 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
+        (include_bytes!("../assets/map3.png").as_slice(), "map3_handle"),
         (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
         (include_bytes!("../assets/map_element/gear_sorting_512.png").as_slice(), "gear_sorting_512"),
-        (include_bytes!("../assets/map_element/shredder_512.png").as_slice(), "shredder_512_handle"),
+        //(include_bytes!("../assets/map_element/shredder_512.png").as_slice(), "shredder_512_handle"),
+        (include_bytes!("../assets/map_element/zunda_mochi_512.png").as_slice(), "shredder_512_handle"),
         (include_bytes!("../assets/map_element/pad_velocity.png").as_slice(), "pad_velocity_handle"),
     ];
 
@@ -299,6 +332,9 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     }
 }
 
+fn setup_ui(mut commands: Commands, mut game_assets: Res<GameAsset>) {
+    cmp_zunda_counter::add(commands, game_assets);
+}
 
 fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
     let sprite_handle = game_assets.image_handles.get("map2_handle").unwrap();
@@ -326,6 +362,7 @@ fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: 
     for collider in colliders {
         entity.with_children(|children| {
             children.spawn(collider)
+                .insert(Restitution::coefficient(0.01))
                 .insert(Friction::coefficient(0.001));
         });
     }
@@ -390,7 +427,9 @@ fn handle_user_input(
                 }
 
                 if pick.is_some() {
-                    if keys.pressed(KeyCode::Escape) || keys.pressed(KeyCode::Q) {
+                    if keys.pressed(KeyCode::Escape) { 
+                        *edit_context = EditContext::Edit(None, EditTool::Select);
+                    } else if keys.pressed(KeyCode::Q) {
                         *edit_context = EditContext::Edit(pick, EditTool::Select);
                     } else if keys.pressed(KeyCode::T) {
                         *edit_context = EditContext::Edit(pick, EditTool::Translate);
@@ -548,6 +587,42 @@ fn handle_user_input(
             }
         }
     }
+}
+
+fn move_camera(
+    keys: Res<Input<KeyCode>>,
+    buttons: Res<Input<MouseButton>>,
+    mut q: Query<(&mut OrthographicProjection, &mut Transform), With<MainCamera>>,
+) {
+    let (mut projection, mut transform) = q.single_mut();
+
+    if keys.pressed(KeyCode::Q) {
+        projection.scale *= 1.01;
+    }
+    if keys.pressed(KeyCode::E) {
+        projection.scale *= 0.99;
+    }
+    if keys.pressed(KeyCode::W) {
+        transform.translation.y += 3.0;
+    }
+    if keys.pressed(KeyCode::A) {
+        transform.translation.x -= 3.0;
+    }
+    if keys.pressed(KeyCode::S) {
+        transform.translation.y -= 3.0;
+    }
+    if keys.pressed(KeyCode::D) {
+        transform.translation.x += 3.0;
+    }
+    if keys.pressed(KeyCode::R) {
+        transform.translation.x = 0.0;
+        transform.translation.y = 0.0;
+        projection.scale = 1.0;
+    }
+    // always ensure you end up with sane values
+    // (pick an upper and lower bound for your application)
+    projection.scale = projection.scale.clamp(0.1, 10.0);
+
 }
 
 fn spawn_map_object (
