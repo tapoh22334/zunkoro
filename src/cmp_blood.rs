@@ -16,7 +16,7 @@ pub fn add(commands: &mut Commands, pos: Vec2) {
 
     for i in 0..SPAWN_NUM {
         let angle = rng.gen_range(0.0..(2.0 * std::f32::consts::PI));
-        let speed = rng.gen_range(0.0..100.0);
+        let speed = rng.gen_range(0.0..1000.0);
         let distance = rng.gen_range(0.0..SIZE);
 
         let dir = Quat::from_rotation_z(angle).mul_vec3(Vec3::new(0.0, 1.0, 0.0));

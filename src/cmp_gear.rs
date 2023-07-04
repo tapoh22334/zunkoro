@@ -19,6 +19,13 @@ pub struct GearSorting {
     pub anglevel: f32
 }
 
+#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+pub struct GearSwirl {
+    pub scale: f32,
+    pub position: Vec2,
+    pub anglevel: f32
+}
+
 
 pub fn add_simple(commands: &mut Commands,
             game_assets: &Res<GameAsset>,
@@ -51,6 +58,23 @@ pub fn add_sorting(commands: &mut Commands,
              gear_sorting.anglevel);
 
     let id = commands.entity(id).insert(gear_sorting).id();
+    return id;
+}
+
+pub fn add_swirl(commands: &mut Commands,
+            game_assets: &Res<GameAsset>,
+            image_assets: &Res<Assets<Image>>,
+            gear_swirl: GearSwirl) -> Entity {
+
+    let id = add_gear(commands,
+             game_assets,
+             image_assets,
+             "gear_swirl_512",
+             gear_swirl.position,
+             gear_swirl.scale,
+             gear_swirl.anglevel);
+
+    let id = commands.entity(id).insert(gear_swirl).id();
     return id;
 }
 

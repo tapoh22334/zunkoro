@@ -45,6 +45,7 @@ use crate::cmp_blood::Blood;
 mod cmp_gear;
 use crate::cmp_gear::GearSimple;
 use crate::cmp_gear::GearSorting;
+use crate::cmp_gear::GearSwirl;
 
 mod cmp_pad_velocity;
 use crate::cmp_pad_velocity::PadVelocity;
@@ -66,6 +67,9 @@ use crate::cmp_main_camera::MainCamera;
 struct SaveContainer {
     gear_simple: Vec<GearSimple>,
     gear_sorting: Vec<GearSorting>,
+    gear_swirl: Vec<GearSwirl>,
+    gate_teleport_entrance: Vec<GateTeleportEntrance>,
+    gate_teleport_exit: Vec<GateTeleportExit>,
     gate_zundamon: Vec<GateZundamon>,
     pad_velocity: Vec<PadVelocity>,
     shredder: Vec<Shredder>,
@@ -76,6 +80,9 @@ impl SaveContainer {
         Self {
             gear_simple: Vec::new(),
             gear_sorting: Vec::new(),
+            gear_swirl: Vec::new(),
+            gate_teleport_entrance: Vec::new(),
+            gate_teleport_exit: Vec::new(),
             gate_zundamon: Vec::new(),
             pad_velocity: Vec::new(),
             shredder: Vec::new(),
@@ -101,6 +108,7 @@ enum MapObject {
     #[default]None,
     GearSimple,
     GearSorting,
+    GearSwirl,
     GateTeleport(Option<(u32, Color)>),
     GateZundamon,
     PadVelocity(Option<Vec2>),
@@ -198,6 +206,9 @@ fn set_framerate(
 fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
               gear_simple_q: Query<(&Velocity, &Transform, &GearSimple)>,
               gear_sorting_q: Query<(&Velocity, &Transform, &GearSorting)>,
+              gear_swirl_q: Query<(&Velocity, &Transform, &GearSwirl)>,
+              gate_teleport_entrance: Query<(&Transform, &GateTeleportEntrance)>,
+              gate_teleport_exit: Query<(&Transform, &GateTeleportExit)>,
               gate_zundamon_q: Query<(&Transform, &GateZundamon)>,
               pad_velocity_q: Query<(&Transform, &PadVelocity)>,
               shredder_q: Query<(&Transform, &Shredder)>,
@@ -222,6 +233,28 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
             e.position = t.translation.truncate();
             e.anglevel = v.angvel;
             save_container.gear_sorting.push(e.clone());
+        }
+
+        for (v, t, e) in gear_swirl_q.iter() {
+            let mut e = e.clone();
+            e.scale = t.scale.truncate().x;
+            e.position = t.translation.truncate();
+            e.anglevel = v.angvel;
+            save_container.gear_swirl.push(e.clone());
+        }
+
+        for (t, e) in gate_teleport_entrance.iter() {
+            let mut e = e.clone();
+            e.size = e.size * t.scale.truncate();
+            e.position = t.translation.truncate();
+            save_container.gate_teleport_entrance.push(e.clone());
+        }
+
+        for (t, e) in gate_teleport_exit.iter() {
+            let mut e = e.clone();
+            e.size = e.size * t.scale.truncate();
+            e.position = t.translation.truncate();
+            save_container.gate_teleport_exit.push(e.clone());
         }
 
         for (t, e) in gate_zundamon_q.iter() {
@@ -269,6 +302,18 @@ fn load_world(
 
         for e in save_container.gear_sorting {
             cmp_gear::add_sorting(&mut commands, &game_assets, &image_assets, e);
+        }
+
+        for e in save_container.gear_swirl {
+            cmp_gear::add_swirl(&mut commands, &game_assets, &image_assets, e);
+        }
+
+        for e in save_container.gate_teleport_entrance {
+            cmp_gate_teleport::add_entrance(&mut commands, e);
+        }
+
+        for e in save_container.gate_teleport_exit {
+            cmp_gate_teleport::add_exit(&mut commands, e);
         }
 
         for e in save_container.gate_zundamon {
@@ -344,6 +389,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/map3.png").as_slice(), "map3_handle"),
         (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
         (include_bytes!("../assets/map_element/gear_sorting_512.png").as_slice(), "gear_sorting_512"),
+        (include_bytes!("../assets/map_element/gear_swirl_512.png").as_slice(), "gear_swirl_512"),
         //(include_bytes!("../assets/map_element/shredder_512.png").as_slice(), "shredder_512_handle"),
         (include_bytes!("../assets/map_element/zunda_mochi_512.png").as_slice(), "shredder_512_handle"),
         (include_bytes!("../assets/map_element/pad_velocity.png").as_slice(), "pad_velocity_handle"),
@@ -521,6 +567,16 @@ fn handle_user_input(
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
                                 let entity = cmp_gear::add_sorting(&mut commands, &game_assets, &image_assets, gs);
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
+                        MapObject::GearSwirl => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let gs = GearSwirl {
+                                    scale: 1.0, position: world_position, anglevel: -0.5
+                                };
+                                let entity = cmp_gear::add_swirl(&mut commands, &game_assets, &image_assets, gs);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -704,6 +760,14 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Gear sorting spawned");
                 *edit_mode = EditContext::Spawn(MapObject::GearSorting);
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Gear Swirl");
+            if ui.button("Spawn").clicked() {
+                info!("Gear swirl spawned");
+                *edit_mode = EditContext::Spawn(MapObject::GearSwirl);
             }
         });
 
