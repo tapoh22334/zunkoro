@@ -1,5 +1,6 @@
 //#![windows_subsystem = "windows"]
 use serde::{Serialize, Deserialize};
+use rand::prelude::*;
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -19,6 +20,10 @@ use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
 use bevy_prototype_lyon::prelude::*;
+
+mod cmp_gate_teleport;
+use crate::cmp_gate_teleport::GateTeleportExit;
+use crate::cmp_gate_teleport::GateTeleportEntrance;
 
 mod cmp_gate_zundamon;
 use crate::cmp_gate_zundamon::GateZundamon;
@@ -53,11 +58,9 @@ use crate::cmp_trajectory::Trajectory;
 mod cmp_zunda_counter;
 use crate::cmp_zunda_counter::Counter;
 
+mod cmp_main_camera;
+use crate::cmp_main_camera::MainCamera;
 //use crate::cmp_gate_zundamon;
-
-/// Used to help identify our main camera
-#[derive(Component)]
-struct MainCamera;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveContainer {
@@ -98,6 +101,7 @@ enum MapObject {
     #[default]None,
     GearSimple,
     GearSorting,
+    GateTeleport(Option<(u32, Color)>),
     GateZundamon,
     PadVelocity(Option<Vec2>),
     Shredder(Vec<Entity>, Vec<Vec2>),
@@ -156,6 +160,10 @@ fn main() {
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<GateTeleportExit>()
+        .register_type::<GateTeleportEntrance>()
+        .add_system(cmp_gate_teleport::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZundamon>()
         .add_system(cmp_gate_zundamon::system.in_set(OnUpdate(AppState::Game)))
@@ -517,6 +525,44 @@ fn handle_user_input(
                             }
                         }
 
+                        MapObject::GateTeleport(ctx) => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let mut rng = rand::thread_rng();
+                                if ctx.is_none() {
+                                    let id = rng.gen_range(0..u32::MAX);
+                                    let color = Color::Hsla {
+                                        hue: rng.gen_range(0.0..1.0),
+                                        saturation: rng.gen_range(0.0..1.0),
+                                        lightness: 0.5,
+                                        alpha: 1.0 };
+                                    let gtent = GateTeleportEntrance {
+                                        id,
+                                        size: Vec2::new(16.0, 16.0),
+                                        position: world_position,
+                                        color,
+                                    };
+
+                                    println!("GateTeleport entrance added {:?}", gtent);
+                                    let entity = cmp_gate_teleport::add_entrance(&mut commands, gtent);
+                                    *edit_context = EditContext::Spawn(MapObject::GateTeleport(Some((id, color))));
+
+                                } else {
+                                    let (id, color) = ctx.unwrap();
+                                    let gtext = GateTeleportExit {
+                                        id,
+                                        size: Vec2::new(16.0, 16.0),
+                                        position: world_position,
+                                        color,
+                                    };
+
+                                    println!("GateTeleport exit added {:?}", gtext);
+                                    let entity = cmp_gate_teleport::add_exit(&mut commands, gtext);
+                                    *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+
+                                }
+                            }
+                        }
+
                         MapObject::GateZundamon => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let gz = GateZundamon {
@@ -658,6 +704,14 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Gear sorting spawned");
                 *edit_mode = EditContext::Spawn(MapObject::GearSorting);
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Teleport Gate");
+            if ui.button("Spawn").clicked() {
+                info!("Teleport Gate spawn start");
+                *edit_mode = EditContext::Spawn(MapObject::GateTeleport(None));
             }
         });
 

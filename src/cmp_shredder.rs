@@ -63,9 +63,9 @@ pub fn add(commands: &mut Commands,
 
 pub fn system_move(
     time: Res<Time>,
-    mut shredder_q: Query<(&mut Transform, &mut Velocity, &mut BBSize, &mut FuseTime, &mut Shredder)>,
+    mut shredder_q: Query<(&Transform, &mut Velocity, &mut BBSize, &mut FuseTime, &mut Shredder)>,
 ) {
-    for (mut t, mut v, _, mut fuse_time, mut shredder) in shredder_q.iter_mut() {
+    for (t, mut v, _, mut fuse_time, mut shredder) in shredder_q.iter_mut() {
         fuse_time.timer.tick(time.delta());
         if ! fuse_time.timer.finished() { continue; }
 

@@ -3,6 +3,10 @@ use bevy_rapier2d::prelude::*;
 use bevy::window::PrimaryWindow;
 use rand::prelude::*;
 
+use crate::cmp_main_camera::MainCamera;
+use crate::cmp_bbsize::BBSize;
+use crate::cmp_gate_teleport::{GateTeleportExit, GateTeleportEntrance};
+use crate::cmp_pad_velocity::PadVelocity;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_trajectory::Trajectory;
 use crate::cmp_trajectory;
@@ -88,5 +92,4 @@ pub fn system_remove(
         }
     }
 }
-
 
