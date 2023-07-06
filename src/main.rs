@@ -36,6 +36,9 @@ mod cmp_fuse_time;
 mod cmp_game_asset;
 use crate::cmp_game_asset::GameAsset;
 
+mod cmp_artillery;
+use crate::cmp_artillery::Artillery;
+
 mod cmp_ball;
 use crate::cmp_ball::Ball;
 
@@ -106,6 +109,7 @@ struct LoadWorldEvent(String);
 #[reflect(Resource, InspectorOptions)]
 enum MapObject {
     #[default]None,
+    Artillery,
     GearSimple,
     GearSorting,
     GearSwirl,
@@ -150,7 +154,7 @@ fn main() {
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
         //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
-        //.add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(set_framerate.on_startup())
         .add_system(setup_graphics.on_startup())
@@ -387,6 +391,8 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
         (include_bytes!("../assets/map3.png").as_slice(), "map3_handle"),
+        (include_bytes!("../assets/map_element/artillery_frag1.png").as_slice(), "artillery_frag1"),
+        (include_bytes!("../assets/map_element/artillery_frag2.png").as_slice(), "artillery_frag2"),
         (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
         (include_bytes!("../assets/map_element/gear_sorting_512.png").as_slice(), "gear_sorting_512"),
         (include_bytes!("../assets/map_element/gear_swirl_512.png").as_slice(), "gear_swirl_512"),
@@ -551,6 +557,18 @@ fn handle_user_input(
 
             EditContext::Spawn(map_object) => {
                     match map_object {
+                        MapObject::Artillery => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let artillery = Artillery {
+                                    scale: 1.0,
+                                    position: world_position,
+                                    angvel: 0.5,
+                                };
+                                let entity = cmp_artillery::add(&mut commands, &game_assets, &image_assets, artillery);
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
                         MapObject::GearSimple => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let gs = GearSimple {
@@ -747,6 +765,14 @@ fn spawn_map_object (
     ){
 
     egui::Window::new("spawn").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Artillery");
+            if ui.button("Spawn").clicked() {
+                info!("Artillery spawned");
+                *edit_mode = EditContext::Spawn(MapObject::Artillery);
+            }
+        });
+
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Gear simple");
             if ui.button("Spawn").clicked() {
