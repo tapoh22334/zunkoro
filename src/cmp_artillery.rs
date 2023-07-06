@@ -75,9 +75,7 @@ pub fn add(commands: &mut Commands,
         let sprite_image = image_assets.get(sprite_handle).unwrap();
         let colliders = multi_polyline_collider_translated(sprite_image);
         let mut child = children.spawn(Barrel);
-        child.with_children(|child2| {
-            let mut child2 = child2.spawn(
-                SpriteBundle {
+        child.insert(SpriteBundle {
                 sprite: Sprite {
                     ..default()
                 },
@@ -85,31 +83,32 @@ pub fn add(commands: &mut Commands,
                 ..default()
             },);
 
-            for collider in colliders {
-                child2.with_children(|child3| {
-                    child3.spawn(collider)
-                        .insert(TransformBundle {
-                            local: Transform {
-                                ..Default::default()
-                            },
-                            ..default()
-                        });
-                });
-            }
+        for collider in colliders {
+            child.with_children(|child2| {
+                child2.spawn(collider)
+                    .insert(TransformBundle {
+                        local: Transform {
+                            ..Default::default()
+                        },
+                        ..default()
+                    });
+            });
+        }
 
-            child2.insert(
-                TransformBundle::from(Transform::from_xyz(256.0, 0.0, 0.0))
-                );
-        });
+            //child2.insert(
+            //    TransformBundle::from(Transform::from_xyz(256.0, 0.0, 0.0))
+            //    );
+
         child.insert(RigidBody::KinematicVelocityBased);
         child.insert(
-            TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0))
+            TransformBundle::from(Transform::from_xyz(256.0, 0.0, 0.0))
             )
             .insert(Velocity {
                 linvel: Vec2::ZERO,
                 angvel,
             });
     });
+
 
     return entity.id();
 }
