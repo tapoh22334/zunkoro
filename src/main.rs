@@ -30,6 +30,9 @@ use crate::cmp_gate_teleport::GateTeleportEntrance;
 mod cmp_gate_zundamon;
 use crate::cmp_gate_zundamon::GateZundamon;
 
+mod cmp_gate_zombie;
+use crate::cmp_gate_zombie::GateZombie;
+
 mod cmp_bbsize;
 use crate::cmp_bbsize::BBSize;
 
@@ -42,6 +45,7 @@ mod cmp_artillery;
 use crate::cmp_artillery::Artillery;
 
 mod cmp_ball;
+mod cmp_ball_zombie;
 use crate::cmp_ball::Ball;
 
 mod cmp_blood;
@@ -75,6 +79,7 @@ struct SaveContainer {
     gear_swirl: Vec<GearSwirl>,
     gate_teleport_entrance: Vec<GateTeleportEntrance>,
     gate_teleport_exit: Vec<GateTeleportExit>,
+    gate_zombie: Vec<GateZombie>,
     gate_zundamon: Vec<GateZundamon>,
     pad_velocity: Vec<PadVelocity>,
     shredder: Vec<Shredder>,
@@ -88,6 +93,7 @@ impl SaveContainer {
             gear_swirl: Vec::new(),
             gate_teleport_entrance: Vec::new(),
             gate_teleport_exit: Vec::new(),
+            gate_zombie: Vec::new(),
             gate_zundamon: Vec::new(),
             pad_velocity: Vec::new(),
             shredder: Vec::new(),
@@ -116,6 +122,7 @@ enum MapObject {
     GearSorting,
     GearSwirl,
     GateTeleport(Option<(u32, Color)>),
+    GateZombie,
     GateZundamon,
     PadVelocity(Option<Vec2>),
     Shredder(Vec<Entity>, Vec<Vec2>),
@@ -172,6 +179,7 @@ fn main() {
 
         //.add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_zombie::system_infection.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
 
@@ -182,6 +190,9 @@ fn main() {
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
         .add_system(cmp_gate_teleport::system.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<GateZombie>()
+        .add_system(cmp_gate_zombie::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZundamon>()
         .add_system(cmp_gate_zundamon::system.in_set(OnUpdate(AppState::Game)))
@@ -219,6 +230,7 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
               gear_swirl_q: Query<(&Velocity, &Transform, &GearSwirl)>,
               gate_teleport_entrance: Query<(&Transform, &GateTeleportEntrance)>,
               gate_teleport_exit: Query<(&Transform, &GateTeleportExit)>,
+              gate_zombie_q: Query<(&Transform, &GateZombie)>,
               gate_zundamon_q: Query<(&Transform, &GateZundamon)>,
               pad_velocity_q: Query<(&Transform, &PadVelocity)>,
               shredder_q: Query<(&Transform, &Shredder)>,
@@ -265,6 +277,13 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
             e.size = e.size * t.scale.truncate();
             e.position = t.translation.truncate();
             save_container.gate_teleport_exit.push(e.clone());
+        }
+
+        for (t, e) in gate_zombie_q.iter() {
+            let mut e = e.clone();
+            e.size = e.size * t.scale.truncate();
+            e.position = t.translation.truncate();
+            save_container.gate_zombie.push(e.clone());
         }
 
         for (t, e) in gate_zundamon_q.iter() {
@@ -324,6 +343,10 @@ fn load_world(
 
         for e in save_container.gate_teleport_exit {
             cmp_gate_teleport::add_exit(&mut commands, e);
+        }
+
+        for e in save_container.gate_zombie {
+            cmp_gate_zombie::add(&mut commands, e);
         }
 
         for e in save_container.gate_zundamon {
@@ -394,6 +417,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/zun1.png").as_slice(), "zun1_handle"),
         (include_bytes!("../assets/zun2.png").as_slice(), "zun2_handle"),
         (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
+        (include_bytes!("../assets/zombie1.png").as_slice(), "zombie1_handle"),
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
         (include_bytes!("../assets/map3.png").as_slice(), "map3_handle"),
@@ -649,6 +673,19 @@ fn handle_user_input(
                             }
                         }
 
+                        MapObject::GateZombie => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let gz = GateZombie {
+                                    size: Vec2::new(128.0, 32.0),
+                                    position: world_position,
+                                    remain: 5,
+                                    prob: 0.5,
+                                };
+                                let entity = cmp_gate_zombie::add(&mut commands, gz);
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
                         MapObject::GateZundamon => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let gz = GateZundamon {
@@ -816,6 +853,14 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Teleport Gate spawn start");
                 *edit_mode = EditContext::Spawn(MapObject::GateTeleport(None));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Zombie Gate");
+            if ui.button("Spawn").clicked() {
+                info!("Zombie Gate spawned");
+                *edit_mode = EditContext::Spawn(MapObject::GateZombie);
             }
         });
 

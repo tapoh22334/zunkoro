@@ -74,7 +74,7 @@ pub fn add_exit(commands: &mut Commands, gate_teleport: GateTeleportExit) -> Ent
 
 pub fn system(
     rapier_context: Res<RapierContext>,
-    mut ball_q: Query<&mut Transform, With<Ball>>,
+    mut ball_q: Query<(&mut Transform, &mut Velocity), With<Ball>>,
     mut entrance_q: Query<(&Transform, &BBSize, &GateTeleportEntrance), Without<Ball>>,
     mut exit_q: Query<(&Transform, &GateTeleportExit), Without<Ball>>,
 ) {
@@ -90,10 +90,11 @@ pub fn system(
 
         rapier_context.intersections_with_shape(
             shape_pos, shape_rot, &shape, filter, |entity| {
-                if let Ok(mut ball_transform) = ball_q.get_mut(entity) {
+                if let Ok((mut ball_transform, mut ball_velocity)) = ball_q.get_mut(entity) {
                     for (exit_transform, exit_gate_teleport) in exit_q.iter() {
                         if exit_gate_teleport.id == gate_teleport.id {
-                            ball_transform.translation= exit_transform.translation;
+                            ball_transform.translation = exit_transform.translation;
+                            ball_velocity.linvel = Vec2::ZERO;
                             break;
                         }
                     }

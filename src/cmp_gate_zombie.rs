@@ -3,24 +3,24 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball;
+use crate::cmp_ball_zombie;
 
 const BALL_SIZE: f32 = 16.0;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-pub struct GateZundamon {
+pub struct GateZombie {
     pub size: Vec2,
     pub position: Vec2,
     pub remain: i32,
     pub prob: f32 }
 
-pub fn add(commands: &mut Commands, gate_zundamon: GateZundamon) -> Entity {
+pub fn add(commands: &mut Commands, gate_zundamon: GateZombie) -> Entity {
     let size = gate_zundamon.size;
     let pos = gate_zundamon.position;
     let mut entity = commands
         .spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::GREEN,
+                    color: Color::GRAY,
                     custom_size: Some(Vec2::new(size.x, size.y)),
                     ..Default::default()
                 },
@@ -40,7 +40,7 @@ pub fn add(commands: &mut Commands, gate_zundamon: GateZundamon) -> Entity {
 pub fn system(
     mut commands: Commands,
     game_assets: Res<GameAsset>,
-    mut query: Query<(&Transform, &BBSize, &mut GateZundamon)>,
+    mut query: Query<(&Transform, &BBSize, &mut GateZombie)>,
 ) {
     let mut rng = rand::thread_rng();
 
@@ -54,7 +54,7 @@ pub fn system(
                 let x = rng.gen_range(pos_min.x .. pos_max.x);
                 let y = rng.gen_range(pos_min.y .. pos_max.y);
 
-                cmp_ball::add(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
+                cmp_ball_zombie::add(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
                 gate_zundamon.remain -= 1;
             }
         }
