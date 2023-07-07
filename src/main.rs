@@ -3,6 +3,8 @@ use serde::{Serialize, Deserialize};
 use rand::prelude::*;
 
 use bevy::prelude::*;
+use bevy::input::mouse::MouseWheel;
+use bevy::input::mouse::MouseMotion;
 use bevy::window::PrimaryWindow;
 use bevy::render::texture::{ImageType, CompressedImageFormats};
 use bevy::sprite::collide_aabb::collide;
@@ -168,10 +170,14 @@ fn main() {
 
         .add_system(setup_ui.in_schedule(OnEnter(AppState::Game)))
 
-        .add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
+        //.add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<Artillery>()
+        .add_system(cmp_artillery::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_artillery::system_fire.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
@@ -391,6 +397,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
         (include_bytes!("../assets/map3.png").as_slice(), "map3_handle"),
+        (include_bytes!("../assets/map4.png").as_slice(), "map4_handle"),
         (include_bytes!("../assets/map_element/artillery_frag1.png").as_slice(), "artillery_frag1"),
         (include_bytes!("../assets/map_element/artillery_frag2.png").as_slice(), "artillery_frag2"),
         (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
@@ -411,7 +418,8 @@ fn setup_ui(mut commands: Commands, mut game_assets: Res<GameAsset>) {
 }
 
 fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
-    let sprite_handle = game_assets.image_handles.get("map2_handle").unwrap();
+    //let sprite_handle = game_assets.image_handles.get("map2_handle").unwrap();
+    let sprite_handle = game_assets.image_handles.get("map4_handle").unwrap();
     let sprite_image = image_assets.get(sprite_handle).unwrap();
     //let collider = single_convex_polyline_collider_translated(sprite_image).unwrap();
     //let collider = single_polyline_collider_translated(sprite_image);
@@ -535,6 +543,7 @@ fn handle_user_input(
                                 let r = pos.distance(world_position);
                                 let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
                                 println!("scale: {:?}", Vec3::ONE * scale);
+                                let scale = (scale * 10.0).round() / 10.0;
                                 transform.scale = Vec3::ONE * scale.max(0.1);
                             }
                         }
@@ -546,6 +555,7 @@ fn handle_user_input(
                                 let pos = transform.translation.truncate();
                                 let diff = world_position - pos;
                                 let scale = diff / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+                                let scale = (scale * 10.0).round() / 10.0;
                                 transform.scale = Vec3::new(scale.x.abs().max(0.1), scale.y.abs().max(0.1), 1.0);
                             }
                         }
@@ -562,7 +572,9 @@ fn handle_user_input(
                                 let artillery = Artillery {
                                     scale: 1.0,
                                     position: world_position,
-                                    angvel: 0.5,
+                                    angvel: 0.1,
+                                    angle: 0.0,
+                                    angle_range: (-0.25 * std::f32::consts::PI, 0.25 * std::f32::consts::PI)
                                 };
                                 let entity = cmp_artillery::add(&mut commands, &game_assets, &image_assets, artillery);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
@@ -726,32 +738,34 @@ fn handle_user_input(
 fn move_camera(
     keys: Res<Input<KeyCode>>,
     buttons: Res<Input<MouseButton>>,
+    mut motion_evr: EventReader<MouseMotion>,
+    mut scroll_evr: EventReader<MouseWheel>,
     mut q: Query<(&mut OrthographicProjection, &mut Transform), With<MainCamera>>,
 ) {
     let (mut projection, mut transform) = q.single_mut();
 
-    if keys.pressed(KeyCode::Q) {
-        projection.scale *= 1.01;
+    {
+        use bevy::input::mouse::MouseScrollUnit;
+        for ev in scroll_evr.iter() {
+            match ev.unit {
+                MouseScrollUnit::Line => {
+                    if ev.y > 0.0 {
+                        projection.scale *= 0.95;
+                    } else {
+                        projection.scale *= 1.05;
+                    }
+                }
+                MouseScrollUnit::Pixel => {}
+            }
+            println!("{} {}", projection.scale, transform.translation);
+        }
     }
-    if keys.pressed(KeyCode::E) {
-        projection.scale *= 0.99;
-    }
-    if keys.pressed(KeyCode::W) {
-        transform.translation.y += 3.0;
-    }
-    if keys.pressed(KeyCode::A) {
-        transform.translation.x -= 3.0;
-    }
-    if keys.pressed(KeyCode::S) {
-        transform.translation.y -= 3.0;
-    }
-    if keys.pressed(KeyCode::D) {
-        transform.translation.x += 3.0;
-    }
-    if keys.pressed(KeyCode::R) {
-        transform.translation.x = 0.0;
-        transform.translation.y = 0.0;
-        projection.scale = 1.0;
+
+    if buttons.pressed(MouseButton::Middle) {
+        for ev in motion_evr.iter() {
+            transform.translation.x -= ev.delta.x * projection.scale;
+            transform.translation.y += ev.delta.y * projection.scale;
+        }
     }
     // always ensure you end up with sane values
     // (pick an upper and lower bound for your application)
