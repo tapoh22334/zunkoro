@@ -1,10 +1,7 @@
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
-use bevy_rapier2d::prelude::*;
 use bevy_prototype_lyon::prelude::*;
 
-use crate::cmp_bbsize::BBSize;
-use crate::cmp_game_asset::GameAsset;
 use crate::cmp_fuse_time::FuseTime;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
@@ -48,9 +45,9 @@ pub fn add(commands: &mut Commands,
 pub fn system(
     mut commands: Commands,
     time: Res<Time>,
-    mut trajectory_q: Query<(Entity, &mut FuseTime, &mut Trajectory, &mut Stroke)>,
+    mut trajectory_q: Query<(Entity, &mut FuseTime, &mut Stroke)>,
 ) {
-    for (entity, mut fuse_time, mut trajectory, mut stroke) in trajectory_q.iter_mut() {
+    for (entity, mut fuse_time, mut stroke) in trajectory_q.iter_mut() {
         fuse_time.timer.tick(time.delta());
         if fuse_time.timer.finished() { 
             commands.entity(entity).despawn();

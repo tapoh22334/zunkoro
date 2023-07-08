@@ -8,20 +8,16 @@ use bevy::input::mouse::MouseMotion;
 use bevy::window::PrimaryWindow;
 use bevy::render::texture::{ImageType, CompressedImageFormats};
 use bevy::sprite::collide_aabb::collide;
-use bevy::audio::AudioLoader;
-use rodio::decoder::Decoder;
 
 use bevy_rapier2d::prelude::*;
-use bevy_rapier_collider_gen::*;
 
 use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_inspector_egui::prelude::*;
 
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
-use bevy_inspector_egui::quick::ResourceInspectorPlugin;
-
 use bevy_prototype_lyon::prelude::*;
+
+mod cmp_block_zombie;
+use crate::cmp_block_zombie::BlockZombie;
 
 mod cmp_gate_teleport;
 use crate::cmp_gate_teleport::GateTeleportExit;
@@ -45,11 +41,10 @@ mod cmp_artillery;
 use crate::cmp_artillery::Artillery;
 
 mod cmp_ball;
+use cmp_ball::Zundamon;
 mod cmp_ball_zombie;
-use crate::cmp_ball::Ball;
-
+use cmp_ball_zombie::Zombie;
 mod cmp_blood;
-use crate::cmp_blood::Blood;
 
 mod cmp_gear;
 use crate::cmp_gear::GearSimple;
@@ -66,14 +61,18 @@ mod cmp_trajectory;
 use crate::cmp_trajectory::Trajectory;
 
 mod cmp_zunda_counter;
-use crate::cmp_zunda_counter::Counter;
 
 mod cmp_main_camera;
 use crate::cmp_main_camera::MainCamera;
 //use crate::cmp_gate_zundamon;
 
+#[derive(Component)]
+pub struct Map;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveContainer {
+    artillery: Vec<Artillery>,
+    block_zombie: Vec<BlockZombie>,
     gear_simple: Vec<GearSimple>,
     gear_sorting: Vec<GearSorting>,
     gear_swirl: Vec<GearSwirl>,
@@ -88,6 +87,8 @@ struct SaveContainer {
 impl SaveContainer {
     fn new() -> Self {
         Self {
+            artillery: Vec::new(),
+            block_zombie: Vec::new(),
             gear_simple: Vec::new(),
             gear_sorting: Vec::new(),
             gear_swirl: Vec::new(),
@@ -118,6 +119,7 @@ struct LoadWorldEvent(String);
 enum MapObject {
     #[default]None,
     Artillery,
+    BlockZombie,
     GearSimple,
     GearSorting,
     GearSwirl,
@@ -144,12 +146,19 @@ impl Default for EditContext {
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
 
+const WINDOW_SIZE_X: f32 = 1920.0;
+const WINDOW_SIZE_Y: f32 = 1080.0;
+
 fn main() {
+//use bevy_inspector_egui::quick::WorldInspectorPlugin;
+//use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
+use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Zunda shower".into(),
-                resolution: (1920., 1080.).into(),
+                resolution: (WINDOW_SIZE_X, WINDOW_SIZE_Y).into(),
                 //mode: WindowMode::BorderlessFullscreen,
                 ..default()
             }),
@@ -157,12 +166,12 @@ fn main() {
         }))
         .add_plugin(EguiPlugin)
         .add_plugin(ShapePlugin)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1000.0))
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         .add_plugin(bevy_framepace::FramepacePlugin)
         .insert_resource(GameAsset::default())
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
-        //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
+        .add_plugin(ResourceInspectorPlugin::<EditContext>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(set_framerate.on_startup())
@@ -187,6 +196,8 @@ fn main() {
         .add_system(cmp_artillery::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_artillery::system_fire.in_set(OnUpdate(AppState::Game)))
 
+        .register_type::<BlockZombie>()
+
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
         .add_system(cmp_gate_teleport::system.in_set(OnUpdate(AppState::Game)))
@@ -210,6 +221,7 @@ fn main() {
         .add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
 
         .add_system(move_camera)
+        .add_system(auto_camera)
         .add_event::<SaveWorldEvent>()
         .add_system(save_world)
         .add_event::<LoadWorldEvent>()
@@ -225,6 +237,8 @@ fn set_framerate(
 }
 
 fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
+              artillery_q: Query<(&Transform, &Artillery)>,
+              block_zombie_q: Query<(&Transform, &BlockZombie)>,
               gear_simple_q: Query<(&Velocity, &Transform, &GearSimple)>,
               gear_sorting_q: Query<(&Velocity, &Transform, &GearSorting)>,
               gear_swirl_q: Query<(&Velocity, &Transform, &GearSwirl)>,
@@ -240,6 +254,20 @@ fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
     for e in save_world_er.iter() {
         let file = &e.0;
         println!("received event: {}", file);
+
+        for (t, e) in artillery_q.iter() {
+            let mut e = e.clone();
+            e.scale = t.scale.truncate().x;
+            e.position = t.translation.truncate();
+            save_container.artillery.push(e.clone());
+        }
+
+        for (t, e) in block_zombie_q.iter() {
+            let mut e = e.clone();
+            e.size = e.size * t.scale.truncate();
+            e.position = t.translation.truncate();
+            save_container.block_zombie.push(e.clone());
+        }
 
         for (v, t, e) in gear_simple_q.iter() {
             let mut e = e.clone();
@@ -325,6 +353,14 @@ fn load_world(
         let json_str = std::fs::read_to_string(file).unwrap();
         let save_container: SaveContainer = serde_json::from_str(&json_str).unwrap();
 
+        for e in save_container.artillery {
+            cmp_artillery::add(&mut commands, &game_assets, e);
+        }
+
+        for e in save_container.block_zombie {
+            cmp_block_zombie::add(&mut commands, e);
+        }
+
         for e in save_container.gear_simple {
             cmp_gear::add_simple(&mut commands, &game_assets, &image_assets, e);
         }
@@ -358,7 +394,7 @@ fn load_world(
         }
 
         for e in save_container.shredder {
-            cmp_shredder::add(&mut commands, &game_assets, &image_assets, e);
+            cmp_shredder::add(&mut commands, &game_assets, e);
         }
 
         //println!("{:?}", save_container);
@@ -371,7 +407,7 @@ fn load_font(game_assets: &mut GameAsset, font_assets: &mut Assets<Font>, font_b
     game_assets.font_handles.insert(name.to_string(), handle);
 }
 
-fn setup_fonts(mut commands: Commands, mut game_assets: ResMut<GameAsset>, mut font_assets: ResMut<Assets<Font>>,) {
+fn setup_fonts(mut game_assets: ResMut<GameAsset>, mut font_assets: ResMut<Assets<Font>>,) {
     let font_mappings = [
         (include_bytes!("../assets/font/FiraMono-Medium.ttf").as_slice(), "font1_handle"),
     ];
@@ -387,7 +423,7 @@ fn load_audio(game_assets: &mut GameAsset, audio_assets: &mut Assets<AudioSource
     game_assets.audio_handles.insert(name.to_string(), handle);
 }
 
-fn setup_sounds(mut commands: Commands, mut game_assets: ResMut<GameAsset>, mut audio_assets: ResMut<Assets<AudioSource>>,) {
+fn setup_sounds(mut game_assets: ResMut<GameAsset>, mut audio_assets: ResMut<Assets<AudioSource>>,) {
     let audio_mappings = [
         (include_bytes!("../assets/audio/zundamon_die1.wav").as_slice(), "zundamon_die1_handle"),
         (include_bytes!("../assets/audio/zundamon_die2.wav").as_slice(), "zundamon_die2_handle"),
@@ -421,7 +457,8 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
         (include_bytes!("../assets/map3.png").as_slice(), "map3_handle"),
-        (include_bytes!("../assets/map4.png").as_slice(), "map4_handle"),
+        //(include_bytes!("../assets/map4.png").as_slice(), "map4_handle"),
+        //(include_bytes!("../assets/map5.png").as_slice(), "map5_handle"),
         (include_bytes!("../assets/map_element/artillery_frag1.png").as_slice(), "artillery_frag1"),
         (include_bytes!("../assets/map_element/artillery_frag2.png").as_slice(), "artillery_frag2"),
         (include_bytes!("../assets/map_element/gear_simple_512.png").as_slice(), "gear_simple_512"),
@@ -432,53 +469,77 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/map_element/pad_velocity.png").as_slice(), "pad_velocity_handle"),
     ];
 
-    for (path, handle) in image_mappings.iter() {
-        load_image(&mut game_assets, &mut image_assets, path, handle);
+    for (bytes, handle) in image_mappings.iter() {
+        println!("{:?}", handle);
+        load_image(&mut game_assets, &mut image_assets, bytes, handle);
     }
 }
 
-fn setup_ui(mut commands: Commands, mut game_assets: Res<GameAsset>) {
+fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
     cmp_zunda_counter::add(commands, game_assets);
 }
 
-fn add_map(commands: &mut Commands, game_assets: &Res<GameAsset>, image_assets: &Res<Assets<Image>>) {
+fn load_map_polyline() -> Vec<Vec<Vec2>> {
+    let map_file = include_bytes!("../assets/map6.map");
+    let file_contents = String::from_utf8_lossy(map_file);
+    let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
+
+    for lines in &map {
+        for line in lines {
+            println!("x: {}, y: {}", line.x, line.y);
+        }
+    }
+
+    return map;
+}
+
+fn add_map(commands: &mut Commands) {
     //let sprite_handle = game_assets.image_handles.get("map2_handle").unwrap();
-    let sprite_handle = game_assets.image_handles.get("map4_handle").unwrap();
-    let sprite_image = image_assets.get(sprite_handle).unwrap();
-    //let collider = single_convex_polyline_collider_translated(sprite_image).unwrap();
-    //let collider = single_polyline_collider_translated(sprite_image);
+    //let sprite_handle = game_assets.image_handles.get("map5_handle").unwrap();
+    let polylines = load_map_polyline();
+    let mut colliders = vec![];
+    let mut shapes = vec![];
 
-    //commands
-    //    .spawn(SpriteBundle {
-    //            texture: sprite_handle.clone(),
-    //            ..Default::default()
-    //        })
-    //    .insert(collider);
-    let colliders = multi_polyline_collider_translated(sprite_image);
+    for polyline in polylines {
+        colliders.push(Collider::polyline(polyline.clone(), None));
+        let polygon = shapes::Polygon {points: polyline, closed: true};
+        shapes.push(polygon);
+    }
 
-    let mut entity = commands.spawn((
-            SpriteBundle {
-                texture: sprite_handle.clone(),
-                transform: Transform::from_xyz(0.0, 0.0, 0.5),
-                ..default()
-            },
-            Interaction::default()
-        ));
+    let mut entity = commands.spawn(Map);
+    entity
+        .insert(TransformBundle {
+            ..default()
+        })
+        .insert(ShapeBundle {
+            ..default()
+        },)
+    ;
 
-    for collider in colliders {
+    for (collider, shape) in colliders.into_iter().zip(shapes.into_iter()) {
         entity.with_children(|children| {
+
             children.spawn(collider)
                 .insert(Restitution::coefficient(0.01))
-                .insert(Friction::coefficient(0.001));
+                .insert(Friction::coefficient(0.001))
+                .insert(ShapeBundle {
+                    path: GeometryBuilder::build_as(&shape),
+                    ..default()
+                })
+                .insert(Fill::color(Color::DARK_GRAY))
+                .insert(Stroke::new(Color::BLACK, 1.0));
+
         });
     }
 
 
 }
 
-fn setup_physics(mut commands: Commands, game_assets: Res<GameAsset>, image_assets: Res<Assets<Image>>) {
+fn setup_physics(mut commands: Commands) {
     /* Create the ground. */
-    add_map(&mut commands, &game_assets, &image_assets);
+    println!("setup map");
+    add_map(&mut commands);
+    println!("end setup map");
 }
 
 
@@ -600,7 +661,18 @@ fn handle_user_input(
                                     angle: 0.0,
                                     angle_range: (-0.25 * std::f32::consts::PI, 0.25 * std::f32::consts::PI)
                                 };
-                                let entity = cmp_artillery::add(&mut commands, &game_assets, &image_assets, artillery);
+                                let entity = cmp_artillery::add(&mut commands, &game_assets, artillery);
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
+                        MapObject::BlockZombie => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let block_zombie = BlockZombie {
+                                    size: Vec2::new(64.0, 64.0),
+                                    position: world_position,
+                                };
+                                let entity = cmp_block_zombie::add(&mut commands, block_zombie);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -653,7 +725,7 @@ fn handle_user_input(
                                     };
 
                                     println!("GateTeleport entrance added {:?}", gtent);
-                                    let entity = cmp_gate_teleport::add_entrance(&mut commands, gtent);
+                                    let _ = cmp_gate_teleport::add_entrance(&mut commands, gtent);
                                     *edit_context = EditContext::Spawn(MapObject::GateTeleport(Some((id, color))));
 
                                 } else {
@@ -706,7 +778,8 @@ fn handle_user_input(
                                 } else {
                                     let origin = origin.unwrap();
                                     let dir = (world_position - origin).normalize();
-                                    let vel = dir * 200.0;
+                                    let vel = dir * 1200.0;
+                                    //let vel = dir * 600.0;
                                     let pd = PadVelocity {
                                         position: origin,
                                         size: Vec2::new(32.0, 32.0),
@@ -757,7 +830,6 @@ fn handle_user_input(
                                     };
                                     let entity = cmp_shredder::add(&mut commands,
                                                                   &game_assets,
-                                                                  &image_assets,
                                                                   shredder);
                                     *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                                 }
@@ -808,6 +880,46 @@ fn move_camera(
     // (pick an upper and lower bound for your application)
     projection.scale = projection.scale.clamp(0.1, 10.0);
 
+
+}
+
+//const AUTO_CAMERA_K: f32 = 0.02;
+const AUTO_CAMERA_K: f32 = 0.03;
+const AUTO_CAMERA_VEL_FORWARD: f32 = 1.5;
+fn auto_camera(
+    mut q: Query<(&mut OrthographicProjection, &mut Transform), With<MainCamera>>,
+    zundamon_q: Query<&Transform, (With<Zundamon>, Without<MainCamera>)>,
+    zombie_q: Query<(&Transform, &Velocity), (With<Zombie>, Without<MainCamera>)>,
+) {
+    if zombie_q.iter().len() == 0 {
+        return;
+    }
+
+    let (mut _projection, mut cam_transform) = q.single_mut();
+
+    let mut min_distance = std::f32::MAX;
+    let mut target_translation = Vec2::ZERO;
+    let mut target_velocity = Vec2::ZERO;
+
+    for (transform, velocity) in zombie_q.iter() {
+        for zundamon_t in zundamon_q.iter() {
+            let dist = transform.translation.truncate().distance(zundamon_t.translation.truncate());
+            if dist < min_distance {
+                min_distance = dist;
+                target_translation = transform.translation.truncate();
+                target_velocity = velocity.linvel;
+            }
+
+        }
+    }
+
+    let vel_forward = target_velocity * AUTO_CAMERA_VEL_FORWARD;
+    let vel_forward = Vec2::new(vel_forward.x.clamp(-300.0, 300.0), vel_forward.y.clamp(-300.0, 300.0));
+    let delta = (target_translation + vel_forward - cam_transform.translation.truncate()) * AUTO_CAMERA_K;
+    let delta = Vec2::new(delta.x.clamp(-5.0, 5.0), delta.y.clamp(-5.0, 5.0));
+    let next_cam_translation = cam_transform.translation.truncate() + delta;
+
+    cam_transform.translation = Vec3::from((next_cam_translation, cam_transform.translation.z));
 }
 
 fn spawn_map_object (
@@ -821,6 +933,14 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Artillery spawned");
                 *edit_mode = EditContext::Spawn(MapObject::Artillery);
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Block Zombie");
+            if ui.button("Spawn").clicked() {
+                info!("Block Zombie spawned");
+                *edit_mode = EditContext::Spawn(MapObject::BlockZombie);
             }
         });
 

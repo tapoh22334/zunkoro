@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball::Ball;
+use crate::cmp_ball::Zundamon;
 
 #[derive(Component)]
 pub struct Counter;
@@ -36,7 +36,7 @@ pub fn add(
 
 pub fn system(
     mut text_q: Query<&mut Text, With<Counter>>,
-    ball_q: Query<Entity, With<Ball>>,
+    ball_q: Query<Entity, With<Zundamon>>,
 ){
     let mut text = text_q.single_mut();
     let len = ball_q.iter().len();

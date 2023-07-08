@@ -1,11 +1,8 @@
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
-use rand::prelude::*;
 use bevy_rapier2d::prelude::*;
-use bevy_rapier_collider_gen::*;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball;
 use crate::cmp_ball::Ball;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
@@ -22,12 +19,10 @@ pub struct Barrel;
 
 pub fn add(commands: &mut Commands,
             game_assets: &Res<GameAsset>,
-            image_assets: &Res<Assets<Image>>,
             artillery: Artillery) -> Entity {
 
     let s = artillery.scale;
     let pos = artillery.position;
-    let angvel = artillery.angvel;
 
     // Fragment 1
     let sprite_handle = game_assets.image_handles.get("artillery_frag1").unwrap();
@@ -59,15 +54,13 @@ pub fn add(commands: &mut Commands,
             angvel: 0.0,
         })
         .insert(Collider::ball(256.0))
-        .insert(CollisionGroups::new(Group::GROUP_1, Group::GROUP_1))
+        .insert(CollisionGroups::new(Group::GROUP_1, Group::GROUP_1 | Group::GROUP_2))
         .insert(Sensor)
         ;
 
     // Fragment2
-    let parent_id = entity.id();
     entity.with_children(|children| {
         let sprite_handle = game_assets.image_handles.get("artillery_frag2").unwrap();
-        let sprite_image = image_assets.get(sprite_handle).unwrap();
         let mut child = children.spawn(Barrel);
         child.insert(SpriteBundle {
                 sprite: Sprite {
@@ -89,15 +82,13 @@ pub fn add(commands: &mut Commands,
 }
 
 pub fn system(
-    mut commands: Commands,
-    game_assets: Res<GameAsset>,
     time: Res<Time>,
     mut artillery_frag1: Query<&mut Artillery>,
-    mut artillery_frag2: Query<(&Parent, &mut Transform, &Barrel)>,
+    mut artillery_frag2: Query<(&Parent, &mut Transform), With<Barrel>>,
 ) {
-    for (parent, mut barrel_transform, barrel) in artillery_frag2.iter_mut() {
+    for (parent, mut barrel_transform) in artillery_frag2.iter_mut() {
         let mut artillery = artillery_frag1.get_mut(parent.get()).unwrap();
-        let mut new_angle = artillery.angle + artillery.angvel * time.delta_seconds();
+        let new_angle = artillery.angle + artillery.angvel * time.delta_seconds();
 
         let pivot_rotation = Quat::from_rotation_z(new_angle - artillery.angle);
         barrel_transform.rotate_around(Vec3::ZERO, pivot_rotation);
@@ -114,10 +105,9 @@ pub fn system(
 
 
 pub fn system_fire(
-    mut commands: Commands,
     rapier_context: Res<RapierContext>,
     mut ball_q: Query<(Entity, &mut Transform, &mut Velocity), With<Ball>>,
-    mut artillery_q: Query<(Entity, &Transform, &BBSize, &Artillery), Without<Ball>>,
+    artillery_q: Query<(Entity, &Transform, &BBSize, &Artillery), Without<Ball>>,
 ) {
     for (artillery_e, artillery_transform, bbsize, artillery) in artillery_q.iter() {
         for (ball_e, mut ball_transform, mut ball_velocity) in ball_q.iter_mut() {

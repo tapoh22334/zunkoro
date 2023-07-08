@@ -1,15 +1,11 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-use bevy::window::PrimaryWindow;
 use rand::prelude::*;
 
-use crate::cmp_main_camera::MainCamera;
-use crate::cmp_bbsize::BBSize;
-use crate::cmp_gate_teleport::{GateTeleportExit, GateTeleportEntrance};
-use crate::cmp_pad_velocity::PadVelocity;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_trajectory::Trajectory;
 use crate::cmp_trajectory;
+use crate::cmp_blood;
 
 #[derive(Component)]
 pub struct Ball {
@@ -33,8 +29,8 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
         .spawn(Ball {radius: r, previous_position: None})
         .insert(Zundamon)
         .insert(RigidBody::Dynamic)
-        .insert(Restitution::coefficient(0.9))
-        .insert(Friction::coefficient(0.05))
+        .insert(Restitution::coefficient(0.1))
+        .insert(Friction::coefficient(0.02))
         .insert(collider)
         .insert(CollisionGroups::new(Group::GROUP_1, Group::ALL))
         .insert(SpriteBundle {
@@ -60,6 +56,27 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
     ;
 }
 
+pub fn kill(commands: &mut Commands,
+            audio: &Res<Audio>,
+            game_assets: &Res<GameAsset>,
+            entity: Entity,
+            trans: &Transform,
+            ) {
+        let mut rng = rand::thread_rng();
+        let sv = vec![ "zundamon_die1_handle",
+                        "zundamon_die2_handle",
+                        "zundamon_die3_handle",
+                        "zundamon_die4_handle",
+                        "zundamon_die5_handle",
+                        "zundamon_die6_handle",
+                        "zundamon_die7_handle",
+                     ];
+        let random_audio = sv[rng.gen_range(0..sv.len())];
+        cmp_blood::add(commands, trans.translation.truncate());
+        commands.entity(entity).despawn();
+        audio.play(game_assets.audio_handles.get(random_audio).unwrap().clone());
+}
+
 pub fn system_trajectory(
     mut commands: Commands,
     mut q: Query<(&Transform, &mut Ball)>,
@@ -76,23 +93,3 @@ pub fn system_trajectory(
         ball.previous_position = Some(curr_pos);
     }
 }
-
-pub fn system_remove(
-    mut commands: Commands,
-    windows_q: Query<&Window, With<PrimaryWindow>>,
-    query: Query<(Entity, &Transform), With<Ball>>,
-) {
-    let window = windows_q.single();
-    let window_width = window.width();
-    let window_height = window.height();
-
-    for (entity, position) in query.iter() {
-        let window_position_x = position.translation.x + window_width / 2.0;
-        let window_position_y = position.translation.y + window_height / 2.0;
-
-        if window_position_x < 0.0 || window_position_x > window_width || window_position_y < 0.0 {
-            commands.entity(entity).despawn();
-        }
-    }
-}
-

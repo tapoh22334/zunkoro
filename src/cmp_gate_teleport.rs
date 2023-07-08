@@ -1,11 +1,8 @@
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-use rand::prelude::*;
 use crate::cmp_ball::Ball;
 use crate::cmp_bbsize::BBSize;
-use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball;
 
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
@@ -76,11 +73,9 @@ pub fn system(
     rapier_context: Res<RapierContext>,
     mut ball_q: Query<(&mut Transform, &mut Velocity), With<Ball>>,
     mut entrance_q: Query<(&Transform, &BBSize, &GateTeleportEntrance), Without<Ball>>,
-    mut exit_q: Query<(&Transform, &GateTeleportExit), Without<Ball>>,
+    exit_q: Query<(&Transform, &GateTeleportExit), Without<Ball>>,
 ) {
-    let mut rng = rand::thread_rng();
-
-    for (transform, bbsize, mut gate_teleport) in entrance_q.iter_mut() {
+    for (transform, bbsize, gate_teleport) in entrance_q.iter_mut() {
         let cuboid_size = Vec2::new(bbsize.x, bbsize.y) / 2.0 * transform.scale.truncate();
         let shape = Collider::cuboid(cuboid_size.x, cuboid_size.y);
         let shape_pos = transform.translation.truncate();

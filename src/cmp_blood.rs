@@ -7,14 +7,14 @@ use crate::cmp_fuse_time::FuseTime;
 #[derive(Component)]
 pub struct Blood;
 
-const SPAWN_NUM: usize = 16;
+const SPAWN_NUM: usize = 8;
 const LIFE_TIME: f32 = 3.0;
 const SIZE: f32 = 4.0;
 
 pub fn add(commands: &mut Commands, pos: Vec2) {
     let mut rng = rand::thread_rng();
 
-    for i in 0..SPAWN_NUM {
+    for _ in 0..SPAWN_NUM {
         let angle = rng.gen_range(0.0..(2.0 * std::f32::consts::PI));
         let speed = rng.gen_range(0.0..1000.0);
         let distance = rng.gen_range(0.0..SIZE);
@@ -27,7 +27,9 @@ pub fn add(commands: &mut Commands, pos: Vec2) {
             .spawn(Blood)
             .insert(RigidBody::Dynamic)
             .insert(Collider::ball(SIZE / 2.0))
-            .insert(CollisionGroups::new(Group::GROUP_2, Group::ALL))
+            .insert(Restitution::coefficient(0.0))
+            .insert(Friction::coefficient(0.9))
+            .insert(CollisionGroups::new(Group::GROUP_3, Group::ALL))
             .insert(SpriteBundle {
                 sprite: Sprite {
                     color: Color::RED,
@@ -48,7 +50,6 @@ pub fn add(commands: &mut Commands, pos: Vec2) {
             angvel: 0.0,
         })
         .insert(FuseTime{timer: Timer::from_seconds(LIFE_TIME, TimerMode::Once)} );
-        ;
 
     }
 }

@@ -40,11 +40,11 @@ pub fn add(commands: &mut Commands, gate_zundamon: GateZundamon) -> Entity {
 pub fn system(
     mut commands: Commands,
     game_assets: Res<GameAsset>,
-    mut query: Query<(&Transform, &BBSize, &mut GateZundamon)>,
+    mut query: Query<(Entity, &Transform, &BBSize, &mut GateZundamon)>,
 ) {
     let mut rng = rand::thread_rng();
 
-    for (transform, bbsize, mut gate_zundamon) in query.iter_mut() {
+    for (entity, transform, bbsize, mut gate_zundamon) in query.iter_mut() {
         if gate_zundamon.remain > 0 {
             if rng.gen::<f32>() < gate_zundamon.prob {
                 let size = Vec2::new(bbsize.x, bbsize.y) * transform.scale.truncate();
@@ -57,6 +57,8 @@ pub fn system(
                 cmp_ball::add(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
                 gate_zundamon.remain -= 1;
             }
+        } else {
+            commands.get_entity(entity).unwrap().despawn();
         }
     }
 }
