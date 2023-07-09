@@ -7,21 +7,21 @@ use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball::Ball;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
-pub struct PadVelocity {
+pub struct PadAcceleration {
     pub size: Vec2,
     pub position: Vec2,
     pub direction: Vec2,
-    pub speed: f32
+    pub speed_delta: f32,
 }
 
 pub fn add(commands: &mut Commands,
                     game_assets: &Res<GameAsset>,
-                    pad_velocity: PadVelocity) -> Entity {
-    let size = pad_velocity.size;
-    let pos = pad_velocity.position;
-    let dir = pad_velocity.direction;
+                    pa: PadAcceleration) -> Entity {
+    let size = pa.size;
+    let pos = pa.position;
+    let dir = pa.direction;
 
-    let sprite_handle = game_assets.image_handles.get("pad_velocity_handle").unwrap();
+    let sprite_handle = game_assets.image_handles.get("pad_acceleration_handle").unwrap();
     let mut entity = commands
         .spawn(SpriteBundle {
                 sprite: Sprite {
@@ -45,7 +45,7 @@ pub fn add(commands: &mut Commands,
         .insert(Collider::cuboid(size.x / 2.0, size.y / 2.0))
         .insert(Sensor)
         .insert(BBSize{x: size.x, y: size.y})
-        .insert(pad_velocity);
+        .insert(pa);
 
     return entity.id();
 }
@@ -54,12 +54,12 @@ pub fn add(commands: &mut Commands,
 pub fn system(
     rapier_context: Res<RapierContext>,
     mut ball_q: Query<(Entity, &mut Velocity), With<Ball>>,
-    pb_q: Query<(Entity, &PadVelocity)>,
+    pa_q: Query<(Entity, &PadAcceleration)>,
 ) {
-    for (pb_e, pb) in pb_q.iter() {
+    for (pa_e, pa) in pa_q.iter() {
         for (ball_e, mut ball_v) in ball_q.iter_mut() {
-            if rapier_context.intersection_pair(pb_e, ball_e) == Some(true) {
-                ball_v.linvel = pb.speed * pb.direction;
+            if rapier_context.intersection_pair(pa_e, ball_e) == Some(true) {
+                ball_v.linvel += pa.speed_delta * pa.direction;
             }
         }
     }
