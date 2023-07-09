@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball::Zundamon;
+use crate::cmp_zundamon_fullbody::ZundamonFullbody;
 
 #[derive(Component)]
 pub struct Counter;
@@ -37,9 +38,10 @@ pub fn add(
 pub fn system(
     mut text_q: Query<&mut Text, With<Counter>>,
     ball_q: Query<Entity, With<Zundamon>>,
+    zundamon_full_q: Query<Entity, With<ZundamonFullbody>>,
 ){
     let mut text = text_q.single_mut();
-    let len = ball_q.iter().len();
+    let len = ball_q.iter().len() + zundamon_full_q.iter().len();
 
     let message = len.to_string() + "/100 Zun";
     text.sections[0].value = message;

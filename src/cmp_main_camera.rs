@@ -51,42 +51,60 @@ pub fn move_camera(
 
 //const AUTO_CAMERA_K: f32 = 0.02;
 const AUTO_CAMERA_K: f32 = 0.06;
+const AUTO_CAMERA_D: f32 = 0.6;
+
 const AUTO_CAMERA_VEL_FORWARD: f32 = 1.5;
-const MAX_TRANSLATION_DELTA: f32 = 100.0;
+//const MAX_TRANSLATION_DELTA: f32 = 100.0;
+const AUTO_CAMERA_SCALE_K: f32 = 0.06;
+const AUTO_CAMERA_DISTANCE_TARGET: f32 = 250.0;
+
+#[derive(Default)]
+pub struct History {
+    pub prev_error: Vec2,
+}
+
 pub fn auto_camera(
+    mut history: Local<History>,
     mut q: Query<(&mut OrthographicProjection, &mut Transform), With<MainCamera>>,
     zundamon_q: Query<&Transform, (With<Zundamon>, Without<MainCamera>)>,
     zombie_q: Query<(&Transform, &Velocity), (With<Zombie>, Without<MainCamera>)>,
 ) {
-    if zombie_q.iter().len() == 0 {
+    if zombie_q.iter().len() == 0 || zundamon_q.iter().len() == 0 {
         return;
     }
 
-    let (mut _projection, mut cam_transform) = q.single_mut();
+    let (mut projection, mut cam_transform) = q.single_mut();
 
     let mut min_distance = std::f32::MAX;
-    let mut target_translation = Vec2::ZERO;
-    let mut target_velocity = Vec2::ZERO;
+    let mut t1_translation = Vec2::ZERO;
+    let mut t1_velocity = Vec2::ZERO;
+    let mut t2_translation = Vec2::ZERO;
 
-    for (transform, velocity) in zombie_q.iter() {
+    for (zombie_t, zombie_v) in zombie_q.iter() {
         for zundamon_t in zundamon_q.iter() {
-            let dist = transform.translation.truncate().distance(zundamon_t.translation.truncate());
+            let dist = zombie_t.translation.truncate().distance(zundamon_t.translation.truncate());
             if dist < min_distance {
                 min_distance = dist;
-                target_translation = transform.translation.truncate();
-                target_velocity = velocity.linvel;
+                t1_translation = zombie_t.translation.truncate();
+                t1_velocity = zombie_v.linvel;
+                t2_translation = zundamon_t.translation.truncate();
             }
-
         }
     }
 
-    let vel_forward = target_velocity * AUTO_CAMERA_VEL_FORWARD;
-    let vel_forward = Vec2::new(vel_forward.x.clamp(-300.0, 300.0), vel_forward.y.clamp(-300.0, 300.0));
-    let delta = (target_translation + vel_forward - cam_transform.translation.truncate()) * AUTO_CAMERA_K;
-    let delta = Vec2::new(delta.x.clamp(-MAX_TRANSLATION_DELTA, MAX_TRANSLATION_DELTA),
-                            delta.y.clamp(-MAX_TRANSLATION_DELTA, MAX_TRANSLATION_DELTA));
-    let next_cam_translation = cam_transform.translation.truncate() + delta;
+    let center = (t1_translation + t2_translation) / 2.0;
+    let error = center - cam_transform.translation.truncate();
+    let delta = error * AUTO_CAMERA_K;
+    //let delta = Vec2::new(delta.x.clamp(-MAX_TRANSLATION_DELTA, MAX_TRANSLATION_DELTA),
+    //                        delta.y.clamp(-MAX_TRANSLATION_DELTA, MAX_TRANSLATION_DELTA));
 
+    let next_cam_translation = cam_transform.translation.truncate() + delta - delta * AUTO_CAMERA_D;
     cam_transform.translation = Vec3::from((next_cam_translation, cam_transform.translation.z));
+
+    //let distance = t1_translation.distance(t2_translation);
+    //let delta = (distance / AUTO_CAMERA_DISTANCE_TARGET) * AUTO_CAMERA_SCALE_K;
+    //projection.scale = delta
+    //
+    history.prev_error = error;
 }
 
