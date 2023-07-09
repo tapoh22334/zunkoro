@@ -453,6 +453,10 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
         (include_bytes!("../assets/zun1.png").as_slice(), "zun1_handle"),
         (include_bytes!("../assets/zun2.png").as_slice(), "zun2_handle"),
         (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
+        (include_bytes!("../assets/zun1_full.png").as_slice(), "zun1_full_handle"),
+        (include_bytes!("../assets/zun2_full.png").as_slice(), "zun2_full_handle"),
+        (include_bytes!("../assets/zun3_full.png").as_slice(), "zun3_full_handle"),
+        (include_bytes!("../assets/zun4_full.png").as_slice(), "zun4_full_handle"),
         (include_bytes!("../assets/zombie1.png").as_slice(), "zombie1_handle"),
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
@@ -884,7 +888,7 @@ fn move_camera(
 }
 
 //const AUTO_CAMERA_K: f32 = 0.02;
-const AUTO_CAMERA_K: f32 = 0.03;
+const AUTO_CAMERA_K: f32 = 0.06;
 const AUTO_CAMERA_VEL_FORWARD: f32 = 1.5;
 fn auto_camera(
     mut q: Query<(&mut OrthographicProjection, &mut Transform), With<MainCamera>>,
@@ -895,7 +899,7 @@ fn auto_camera(
         return;
     }
 
-    let (mut _projection, mut cam_transform) = q.single_mut();
+    let (mut projection, mut cam_transform) = q.single_mut();
 
     let mut min_distance = std::f32::MAX;
     let mut target_translation = Vec2::ZERO;
