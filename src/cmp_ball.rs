@@ -30,7 +30,7 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
         .insert(Zundamon)
         .insert(RigidBody::Dynamic)
         .insert(Restitution::coefficient(0.1))
-        .insert(Friction::coefficient(0.02))
+        .insert(Friction::coefficient(0.011))
         .insert(collider)
         .insert(CollisionGroups::new(Group::GROUP_1, Group::ALL))
         .insert(SpriteBundle {

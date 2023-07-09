@@ -184,7 +184,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
         .add_plugin(ResourceInspectorPlugin::<EditContext>::default())
-        .add_plugin(RapierDebugRenderPlugin::default())
+        //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(set_framerate.on_startup())
         .add_system(setup_graphics.on_startup())
@@ -574,7 +574,8 @@ fn add_map(commands: &mut Commands) {
                     path: GeometryBuilder::build_as(&shape),
                     ..default()
                 })
-                .insert(Fill::color(Color::DARK_GRAY))
+                //.insert(Fill::color(Color::DARK_GRAY))
+                .insert(Fill::color(Color::BLACK))
                 .insert(Stroke::new(Color::BLACK, 1.0));
 
         });
