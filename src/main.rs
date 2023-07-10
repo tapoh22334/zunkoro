@@ -1,3 +1,4 @@
+use bevy_rapier2d::rapier::prelude::IntegrationParameters;
 //#![windows_subsystem = "windows"]
 use serde::{Serialize, Deserialize};
 use rand::prelude::*;
@@ -179,14 +180,14 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_plugin(EguiPlugin)
         .add_plugin(ShapePlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
-        .add_plugin(bevy_framepace::FramepacePlugin)
+        //.add_plugin(bevy_framepace::FramepacePlugin)
         .insert_resource(GameAsset::default())
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
-        .add_plugin(ResourceInspectorPlugin::<EditContext>::default())
+        //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
         //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
-        .add_system(set_framerate.on_startup())
+        //.add_system(set_framerate.on_startup())
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
         .add_system(setup_fonts.on_startup())
@@ -584,7 +585,12 @@ fn add_map(commands: &mut Commands) {
 
 }
 
-fn setup_physics(mut commands: Commands) {
+fn setup_physics(mut commands: Commands,
+                 mut rapier_configuration: ResMut<RapierConfiguration>) {
+
+    println!("{:?}", rapier_configuration.timestep_mode);
+    rapier_configuration.timestep_mode = TimestepMode::Variable { max_dt: 1.0 / 60.0, time_scale: 0.6, substeps: 1 };
+
     /* Create the ground. */
     println!("setup map");
     add_map(&mut commands);

@@ -25,8 +25,8 @@ pub fn add(
         .with_style(Style {
             position_type: PositionType::Absolute,
             position: UiRect {
-                bottom: Val::Percent(5.0),
-                right: Val::Percent(50.),
+                top: Val::Percent(5.0),
+                right: Val::Percent(7.5),
                 ..default()
             },
             ..default()
@@ -35,7 +35,13 @@ pub fn add(
 }
 
 
+#[derive(Default)]
+pub struct History {
+    pub count_max: usize,
+}
+
 pub fn system(
+    mut history: Local<History>,
     mut text_q: Query<&mut Text, With<Counter>>,
     ball_q: Query<Entity, With<Zundamon>>,
     zundamon_full_q: Query<Entity, With<ZundamonFullbody>>,
@@ -43,6 +49,10 @@ pub fn system(
     let mut text = text_q.single_mut();
     let len = ball_q.iter().len() + zundamon_full_q.iter().len();
 
-    let message = len.to_string() + "/100 Zun";
+    if history.count_max < len {
+        history.count_max = len;
+    }
+
+    let message = len.to_string() + "/" + history.count_max.to_string().as_str() + " Zun";
     text.sections[0].value = message;
 }
