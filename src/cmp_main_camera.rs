@@ -63,8 +63,8 @@ pub fn move_camera(
 }
 
 //const AUTO_CAMERA_K: f32 = 0.02;
-const AUTO_CAMERA_K: f32 = 0.06;
-const AUTO_CAMERA_D: f32 = 0.6;
+const AUTO_CAMERA_K: f32 = 0.08;
+const AUTO_CAMERA_D: f32 = 0.3;
 
 const AUTO_CAMERA_VEL_FORWARD: f32 = 1.5;
 //const MAX_TRANSLATION_DELTA: f32 = 100.0;

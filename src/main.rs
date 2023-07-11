@@ -23,6 +23,9 @@ use crate::cmp_block_zombie::BlockZombie;
 mod cmp_converter_body;
 use crate::cmp_converter_body::ConverterBody;
 
+mod cmp_fuse_time;
+use crate::cmp_fuse_time::FuseTime;
+
 mod cmp_gate_teleport;
 use crate::cmp_gate_teleport::GateTeleportExit;
 use crate::cmp_gate_teleport::GateTeleportEntrance;
@@ -35,8 +38,6 @@ use crate::cmp_gate_zombie::GateZombie;
 
 mod cmp_bbsize;
 use crate::cmp_bbsize::BBSize;
-
-mod cmp_fuse_time;
 
 mod cmp_game_asset;
 use crate::cmp_game_asset::GameAsset;
@@ -159,8 +160,8 @@ impl Default for EditContext {
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
 
-const WINDOW_SIZE_X: f32 = 1920.0;
-const WINDOW_SIZE_Y: f32 = 1080.0;
+const WINDOW_SIZE_Y: f32 = 1920.0;
+const WINDOW_SIZE_X: f32 = 1080.0;
 
 fn main() {
 //use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -213,6 +214,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .register_type::<ConverterBody>()
         .add_system(cmp_converter_body::system.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<FuseTime>()
 
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
@@ -529,13 +532,14 @@ fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
 }
 
 fn load_map_polyline() -> Vec<Vec<Vec2>> {
-    let map_file = include_bytes!("../assets/map6.map");
+    let map_file = include_bytes!("../assets/map_mini1.map");
+    //let map_file = include_bytes!("../assets/map6.map");
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
 
     for lines in &map {
         for line in lines {
-            println!("x: {}, y: {}", line.x, line.y);
+            debug!("x: {}, y: {}", line.x, line.y);
         }
     }
 
@@ -551,7 +555,7 @@ fn add_map(commands: &mut Commands) {
 
     for polyline in polylines {
         colliders.push(Collider::polyline(polyline.clone(), None));
-        let polygon = shapes::Polygon {points: polyline, closed: true};
+        let polygon = shapes::Polygon {points: polyline, closed: false};
         shapes.push(polygon);
     }
 
@@ -585,11 +589,12 @@ fn add_map(commands: &mut Commands) {
 
 }
 
+const SIMULATION_TIME_SCALE: f32 = 1.0;
 fn setup_physics(mut commands: Commands,
                  mut rapier_configuration: ResMut<RapierConfiguration>) {
 
     println!("{:?}", rapier_configuration.timestep_mode);
-    rapier_configuration.timestep_mode = TimestepMode::Variable { max_dt: 1.0 / 60.0, time_scale: 0.6, substeps: 1 };
+    rapier_configuration.timestep_mode = TimestepMode::Variable { max_dt: 1.0 / 60.0, time_scale: SIMULATION_TIME_SCALE, substeps: 1 };
 
     /* Create the ground. */
     println!("setup map");
@@ -818,6 +823,7 @@ fn handle_user_input(
                                     position: world_position,
                                     remain: 5,
                                     prob: 0.5,
+                                    spawn_offset_sec: 3.0,
                                 };
                                 let entity = cmp_gate_zombie::add(&mut commands, gz);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
@@ -1043,20 +1049,32 @@ fn game_mode_select (
     mut load_world_ew: EventWriter<LoadWorldEvent>,
     mut egui_contexts: EguiContexts,
     mut next_app_state: ResMut<NextState<AppState>>,
+    mut load_json_path: Local<Option<String>>,
+    mut save_json_path: Local<Option<String>>,
     ){
+
+    if load_json_path.is_none() {
+        *load_json_path = Some("assets/map.json".to_string());
+    }
+
+    if save_json_path.is_none() {
+        *save_json_path = Some("assets/map.json".to_string());
+    }
 
     egui::Window::new("GameControl").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Save");
+            ui.text_edit_singleline(save_json_path.as_mut().unwrap());
             if ui.button("o").clicked() {
-                save_world_ew.send(SaveWorldEvent("assets/map.json".to_string()));
+                save_world_ew.send(SaveWorldEvent(save_json_path.clone().unwrap()));
             }
         });
 
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Load");
+            ui.text_edit_singleline(load_json_path.as_mut().unwrap());
             if ui.button("o").clicked() {
-                load_world_ew.send(LoadWorldEvent("assets/map.json".to_string()));
+                load_world_ew.send(LoadWorldEvent(load_json_path.clone().unwrap()));
             }
         });
 

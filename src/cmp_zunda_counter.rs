@@ -53,6 +53,6 @@ pub fn system(
         history.count_max = len;
     }
 
-    let message = len.to_string() + "/" + history.count_max.to_string().as_str() + " Zun";
+    let message = len.to_string() + "/" + history.count_max.to_string().as_str();
     text.sections[0].value = message;
 }

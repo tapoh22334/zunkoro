@@ -14,12 +14,13 @@ pub struct GateZombie {
     pub size: Vec2,
     pub position: Vec2,
     pub remain: i32,
-    pub prob: f32
+    pub prob: f32,
+    pub spawn_offset_sec: f32,
 }
 
-pub fn add(commands: &mut Commands, gate_zundamon: GateZombie) -> Entity {
-    let size = gate_zundamon.size;
-    let pos = gate_zundamon.position;
+pub fn add(commands: &mut Commands, gate_zombie: GateZombie) -> Entity {
+    let size = gate_zombie.size;
+    let pos = gate_zombie.position;
     let mut entity = commands
         .spawn(SpriteBundle {
                 sprite: Sprite {
@@ -34,8 +35,8 @@ pub fn add(commands: &mut Commands, gate_zundamon: GateZombie) -> Entity {
     entity
         .insert(TransformBundle::from(Transform::from_xyz(pos.x, pos.y, 0.0)))
         .insert(BBSize{x: size.x, y: size.y})
-        .insert(FuseTime{timer: Timer::from_seconds(START_TIME_SEC, TimerMode::Once)} )
-        .insert(gate_zundamon);
+        .insert(FuseTime{timer: Timer::from_seconds(gate_zombie.spawn_offset_sec, TimerMode::Once)} )
+        .insert(gate_zombie);
 
     return entity.id();
 }
@@ -49,12 +50,12 @@ pub fn system(
 ) {
     let mut rng = rand::thread_rng();
 
-    for (entity, transform, bbsize, mut fuse_time, mut gate_zundamon) in query.iter_mut() {
+    for (entity, transform, bbsize, mut fuse_time, mut gate_zombie) in query.iter_mut() {
         fuse_time.timer.tick(time.delta());
         if ! fuse_time.timer.finished() { continue; }
 
-        if gate_zundamon.remain > 0 {
-            if rng.gen::<f32>() < gate_zundamon.prob {
+        if gate_zombie.remain > 0 {
+            if rng.gen::<f32>() < gate_zombie.prob {
                 let size = Vec2::new(bbsize.x, bbsize.y) * transform.scale.truncate();
                 let pos_max = transform.translation.truncate() + (size / 2.0);
                 let pos_min = transform.translation.truncate() - (size / 2.0);
@@ -63,7 +64,7 @@ pub fn system(
                 let y = rng.gen_range(pos_min.y .. pos_max.y);
 
                 cmp_ball_zombie::add(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
-                gate_zundamon.remain -= 1;
+                gate_zombie.remain -= 1;
             }
         } else {
             commands.get_entity(entity).unwrap().despawn();

@@ -19,7 +19,7 @@ pub fn add(commands: &mut Commands, converter_body: ConverterBody) -> Entity {
     let mut entity = commands
         .spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::rgba(0.0, 0.0, 0.0, 0.1),
+                    color: Color::YELLOW,
                     custom_size: Some(Vec2::new(size.x, size.y)),
                     ..Default::default()
                 },
