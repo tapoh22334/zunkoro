@@ -243,7 +243,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_main_camera::move_camera)
-        .add_system(cmp_main_camera::auto_camera)
+        //.add_system(cmp_main_camera::auto_camera)
 
         .add_event::<SaveWorldEvent>()
         .add_system(save_world)
@@ -823,7 +823,7 @@ fn handle_user_input(
                                     position: world_position,
                                     remain: 5,
                                     prob: 0.5,
-                                    spawn_offset_sec: 3.0,
+                                    spawn_offset_sec: 0.0,
                                 };
                                 let entity = cmp_gate_zombie::add(&mut commands, gz);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
