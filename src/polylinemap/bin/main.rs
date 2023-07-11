@@ -8,15 +8,13 @@ use std::process::exit;
 
 use svg2polylines::{self, Polyline};
 
-const WINDOW_SIZE_X: f32 = 1920.0;
-const WINDOW_SIZE_Y: f32 = 1080.0;
-
 fn transform_coordinate(v: Vec2) -> Vec2 {
     let mut rv: Vec2 = Vec2::ZERO;
-    rv.y = -v.y + WINDOW_SIZE_Y / 2.0;
+    rv.y = -v.y;
     rv.x = v.x;
 
-    return rv * 3.779528;
+    //return rv * 3.779528;
+    return rv;
 }
 
 fn main() {
