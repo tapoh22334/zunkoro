@@ -65,7 +65,6 @@ pub fn move_camera(
 //const AUTO_CAMERA_K: f32 = 0.02;
 const AUTO_CAMERA_K: f32 = 0.08;
 const AUTO_CAMERA_D: f32 = 0.3;
-
 const AUTO_CAMERA_VEL_FORWARD: f32 = 1.5;
 //const MAX_TRANSLATION_DELTA: f32 = 100.0;
 const AUTO_CAMERA_SCALE_K: f32 = 0.06;
@@ -76,6 +75,29 @@ const AUTO_CAMERA_TRANSITION_WAIT_SEC: f32 = 1.5;
 #[derive(Default)]
 pub struct History {
     pub prev_error: Vec2,
+}
+
+fn find_nearest_pair(
+    zombie_q: &Query<(Entity, &Transform), (With<Zombie>, Without<MainCamera>)>,
+    zundamon_q: &Query<(Entity, &Transform), (With<Zundamon>, Without<MainCamera>)>,
+    ) -> (Entity, Entity) {
+
+    let mut min_distance = std::f32::MAX;
+    let mut t1_e = None;
+    let mut t2_e = None;
+
+    for (zombie_e, zombie_t) in zombie_q.iter() {
+        for (zundamon_e, zundamon_t) in zundamon_q.iter() {
+            let dist = zombie_t.translation.truncate().distance(zundamon_t.translation.truncate());
+            if dist < min_distance {
+                min_distance = dist;
+                t1_e = Some(zombie_e);
+                t2_e = Some(zundamon_e);
+            }
+        }
+    }
+
+    (t1_e.unwrap(), t2_e.unwrap())
 }
 
 pub fn auto_camera(
@@ -94,23 +116,7 @@ pub fn auto_camera(
     let (mut projection, mut cam_transform) = q.single_mut();
 
     // Transition focus
-    let mut min_distance = std::f32::MAX;
-    let mut t1_e = None;
-    let mut t2_e = None;
-
-    for (zombie_e, zombie_t) in zombie_q.iter() {
-        for (zundamon_e, zundamon_t) in zundamon_q.iter() {
-            let dist = zombie_t.translation.truncate().distance(zundamon_t.translation.truncate());
-            if dist < min_distance {
-                min_distance = dist;
-                t1_e = Some(zombie_e);
-                t2_e = Some(zundamon_e);
-            }
-        }
-    }
-
-    let t1_e = t1_e.unwrap();
-    let t2_e = t2_e.unwrap();
+    let (t1_e, t2_e) = find_nearest_pair(&zombie_q, &zundamon_q);
 
     if curr_interest.is_none() {
         *curr_interest = Some((t1_e, t2_e));
@@ -158,3 +164,53 @@ pub fn auto_camera(
     history.prev_error = error;
 }
 
+
+fn find_bottom(
+    zundamon_q: &Query<(Entity, &Transform), (With<Zundamon>, Without<MainCamera>)>,
+    ) -> Entity {
+
+    let mut min_y = std::f32::MAX;
+    let mut entity = None;
+
+    for (zundamon_e, zundamon_t) in zundamon_q.iter() {
+        let y = zundamon_t.translation.truncate().y;
+        if y < min_y {
+            min_y = y;
+            entity = Some(zundamon_e);
+        }
+    }
+
+    entity.unwrap()
+}
+
+
+
+use bevy::window::PrimaryWindow;
+const AUTO_CAMERA_VERTICAL_K: f32 = 0.08;
+const AUTO_CAMERA_VERTICAL_D: f32 = 0.3;
+const AUTO_CAMERA_VERTICAL_POS_RATIO: f32 = 0.65;
+
+pub fn auto_camera_vertical(
+    windows_q: Query<&Window, With<PrimaryWindow>>,
+    mut camera_q: Query<(&mut OrthographicProjection, &mut Transform), With<MainCamera>>,
+    zundamon_q: Query<(Entity, &Transform), (With<Zundamon>, Without<MainCamera>)>,
+) {
+    if zundamon_q.iter().len() == 0 {
+        return;
+    }
+
+    let (mut _projection, mut cam_transform) = camera_q.single_mut();
+    let windows = windows_q.single();
+    let window_size_y = windows.resolution.height();
+    let y_scroll = window_size_y * AUTO_CAMERA_VERTICAL_POS_RATIO - window_size_y / 2.0;
+
+    let target_e = find_bottom(&zundamon_q);
+
+    let (_, zundamon_t) = zundamon_q.get(target_e).unwrap();
+
+    let error = zundamon_t.translation.y - cam_transform.translation.y + y_scroll;
+    let delta = (error * AUTO_CAMERA_VERTICAL_K).clamp(std::f32::MIN, 0.0);
+
+    let next_y = cam_transform.translation.y + delta - delta * AUTO_CAMERA_VERTICAL_D;
+    cam_transform.translation = Vec3::from((cam_transform.translation.x, next_y, cam_transform.translation.z));
+}

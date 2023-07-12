@@ -244,6 +244,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .add_system(cmp_main_camera::move_camera)
         //.add_system(cmp_main_camera::auto_camera)
+        .add_system(cmp_main_camera::auto_camera_vertical)
 
         .add_event::<SaveWorldEvent>()
         .add_system(save_world)
@@ -532,7 +533,7 @@ fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
 }
 
 fn load_map_polyline() -> Vec<Vec<Vec2>> {
-    let map_file = include_bytes!("../assets/map_mini1.map");
+    let map_file = include_bytes!("../assets/map_mini2.map");
     //let map_file = include_bytes!("../assets/map6.map");
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
