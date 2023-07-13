@@ -137,3 +137,110 @@ fn add_gear(commands: &mut Commands,
     return entity.id();
 
 }
+
+
+const FILE_NAME_SIMPLE: &str = "/gear_simple.map";
+const FILE_NAME_SORTING: &str = "/gear_SORTING.map";
+const FILE_NAME_SWIRL: &str = "/gear_SWIRL.map";
+
+use crate::ev_save_load_world::LoadWorldEvent;
+pub fn load(
+    mut load_world_er: EventReader<LoadWorldEvent>,
+    mut commands: Commands,
+    game_assets: Res<GameAsset>,
+    image_assets: Res<Assets<Image>>,
+    ) {
+
+    for e in load_world_er.iter() {
+        {
+            let dir = e.0.clone();
+            let json_str = std::fs::read_to_string(dir + FILE_NAME_SIMPLE);
+            if let Ok(json_str) = json_str {
+                let elem_list: Vec<GearSimple> = serde_json::from_str(&json_str).unwrap();
+
+                for e in elem_list {
+                    add_simple(&mut commands, &game_assets, &image_assets, e);
+                }
+            }
+        }
+
+        {
+            let dir = e.0.clone();
+            let json_str = std::fs::read_to_string(dir + FILE_NAME_SORTING);
+            if let Ok(json_str) = json_str {
+                let elem_list: Vec<GearSorting> = serde_json::from_str(&json_str).unwrap();
+
+                for e in elem_list {
+                    add_sorting(&mut commands, &game_assets, &image_assets, e);
+                }
+            }
+        }
+
+        {
+            let dir = e.0.clone();
+            let json_str = std::fs::read_to_string(dir + FILE_NAME_SWIRL);
+            if let Ok(json_str) = json_str {
+                let elem_list: Vec<GearSwirl> = serde_json::from_str(&json_str).unwrap();
+
+                for e in elem_list {
+                    add_swirl(&mut commands, &game_assets, &image_assets, e);
+                }
+            }
+        }
+    }
+}
+
+
+
+use crate::ev_save_load_world::SaveWorldEvent;
+pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
+              gear_simple_q: Query<(&Velocity, &Transform, &GearSimple)>,
+              gear_sorting_q: Query<(&Velocity, &Transform, &GearSorting)>,
+              gear_swirl_q: Query<(&Velocity, &Transform, &GearSwirl)>,
+              ) {
+    for e in save_world_er.iter() {
+
+        {
+            // GearSimple
+            let dir = e.0.clone();
+            let mut elem_list: Vec<GearSimple> = vec![];
+            for (v, t, e) in gear_simple_q.iter() {
+                let mut e = e.clone();
+                e.scale = t.scale.truncate().x;
+                e.position = t.translation.truncate();
+                e.anglevel = v.angvel;
+                elem_list.push(e.clone());
+            }
+            std::fs::write(dir + FILE_NAME_SIMPLE, serde_json::to_string(&elem_list).unwrap()).unwrap();
+        }
+
+        {
+            // GearSorting
+            let dir = e.0.clone();
+            let mut elem_list: Vec<GearSorting> = vec![];
+            for (v, t, e) in gear_sorting_q.iter() {
+                let mut e = e.clone();
+                e.scale = t.scale.truncate().x;
+                e.position = t.translation.truncate();
+                e.anglevel = v.angvel;
+                elem_list.push(e.clone());
+            }
+            std::fs::write(dir + FILE_NAME_SORTING, serde_json::to_string(&elem_list).unwrap()).unwrap();
+        }
+
+        {
+            // GearSwirl
+            let dir = e.0.clone();
+            let mut elem_list: Vec<GearSwirl> = vec![];
+            for (v, t, e) in gear_swirl_q.iter() {
+                let mut e = e.clone();
+                e.scale = t.scale.truncate().x;
+                e.position = t.translation.truncate();
+                e.anglevel = v.angvel;
+                elem_list.push(e.clone());
+            }
+            std::fs::write(dir + FILE_NAME_SWIRL, serde_json::to_string(&elem_list).unwrap()).unwrap();
+        }
+    }
+}
+

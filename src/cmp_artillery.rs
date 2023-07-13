@@ -121,3 +121,43 @@ pub fn system_fire(
     }
 }
 
+const FILE_NAME: &str = "/artillery.map";
+use crate::ev_save_load_world::LoadWorldEvent;
+pub fn load(
+    mut load_world_er: EventReader<LoadWorldEvent>,
+    mut commands: Commands,
+    game_assets: Res<GameAsset>,
+    ) {
+
+    for e in load_world_er.iter() {
+        let dir = e.0.clone();
+
+        let json_str = std::fs::read_to_string(dir + FILE_NAME);
+        if let Ok(json_str) = json_str {
+            let elem_list: Vec<Artillery> = serde_json::from_str(&json_str).unwrap();
+
+            for e in elem_list {
+                add(&mut commands, &game_assets, e);
+            }
+        }
+    }
+}
+
+use crate::ev_save_load_world::SaveWorldEvent;
+pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
+              artillery_q: Query<(&Transform, &Artillery)>) {
+    for e in save_world_er.iter() {
+        let dir = e.0.clone();
+        let mut artillery_list: Vec<Artillery> = vec![];
+
+        for (t, e) in artillery_q.iter() {
+            let mut e = e.clone();
+            e.scale = t.scale.truncate().x;
+            e.position = t.translation.truncate();
+            artillery_list.push(e.clone());
+        }
+
+        std::fs::write(dir + FILE_NAME, serde_json::to_string(&artillery_list).unwrap()).unwrap();
+    }
+}
+

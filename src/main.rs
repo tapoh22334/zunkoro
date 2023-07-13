@@ -74,6 +74,11 @@ mod cmp_main_camera;
 use crate::cmp_main_camera::MainCamera;
 //use crate::cmp_gate_zundamon;
 
+
+mod ev_save_load_world;
+use crate::ev_save_load_world::SaveWorldEvent;
+use crate::ev_save_load_world::LoadWorldEvent;
+
 #[derive(Component)]
 pub struct Map;
 
@@ -122,9 +127,6 @@ enum EditTool { #[default] Select,
                 Scale,
                 ScaleDistort,
                 }
-
-struct SaveWorldEvent(String);
-struct LoadWorldEvent(String);
 
 #[derive(Resource, Reflect, FromReflect, Clone, PartialEq, Debug, Default, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
@@ -200,6 +202,9 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .add_system(setup_ui.in_schedule(OnEnter(AppState::Game)))
 
+        .add_event::<SaveWorldEvent>()
+        .add_event::<LoadWorldEvent>()
+
         //.add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball_zombie::system_infection.in_set(OnUpdate(AppState::Game)))
@@ -207,33 +212,54 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<Artillery>()
+        .add_system(cmp_artillery::load)
+        .add_system(cmp_artillery::save)
         .add_system(cmp_artillery::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_artillery::system_fire.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<BlockZombie>()
+        .add_system(cmp_block_zombie::load)
+        .add_system(cmp_block_zombie::save)
 
         .register_type::<ConverterBody>()
+        .add_system(cmp_converter_body::load)
+        .add_system(cmp_converter_body::save)
         .add_system(cmp_converter_body::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<FuseTime>()
 
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
+        .add_system(cmp_gate_teleport::load)
+        .add_system(cmp_gate_teleport::save)
         .add_system(cmp_gate_teleport::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZombie>()
+        .add_system(cmp_gate_zombie::load)
+        .add_system(cmp_gate_zombie::save)
         .add_system(cmp_gate_zombie::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<GateZundamon>()
+        .add_system(cmp_gate_zundamon::load)
+        .add_system(cmp_gate_zundamon::save)
         .add_system(cmp_gate_zundamon::system.in_set(OnUpdate(AppState::Game)))
 
+        .add_system(cmp_gear::load)
+        .add_system(cmp_gear::save)
+
         .register_type::<PadVelocity>()
+        .add_system(cmp_pad_velocity::load)
+        .add_system(cmp_pad_velocity::save)
         .add_system(cmp_pad_velocity::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<PadAcceleration>()
+        .add_system(cmp_pad_acceleration::load)
+        .add_system(cmp_pad_acceleration::save)
         .add_system(cmp_pad_acceleration::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<Shredder>()
+        .add_system(cmp_shredder::load)
+        .add_system(cmp_shredder::save)
         .add_system(cmp_shredder::system_move.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_shredder::system_kill.in_set(OnUpdate(AppState::Game)))
 
@@ -246,10 +272,6 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         //.add_system(cmp_main_camera::auto_camera)
         .add_system(cmp_main_camera::auto_camera_vertical)
 
-        .add_event::<SaveWorldEvent>()
-        .add_system(save_world)
-        .add_event::<LoadWorldEvent>()
-        .add_system(load_world)
         .run();
 }
 
@@ -260,194 +282,6 @@ fn set_framerate(
     settings.limiter = Limiter::from_framerate(60.0);
 }
 
-fn save_world(mut save_world_er: EventReader<SaveWorldEvent>,
-              artillery_q: Query<(&Transform, &Artillery)>,
-              block_zombie_q: Query<(&Transform, &BlockZombie)>,
-              converter_body_q: Query<(&Transform, &ConverterBody)>,
-              gear_simple_q: Query<(&Velocity, &Transform, &GearSimple)>,
-              gear_sorting_q: Query<(&Velocity, &Transform, &GearSorting)>,
-              gear_swirl_q: Query<(&Velocity, &Transform, &GearSwirl)>,
-              gate_teleport_entrance: Query<(&Transform, &GateTeleportEntrance)>,
-              gate_teleport_exit: Query<(&Transform, &GateTeleportExit)>,
-              gate_zombie_q: Query<(&Transform, &GateZombie)>,
-              gate_zundamon_q: Query<(&Transform, &GateZundamon)>,
-              pad_velocity_q: Query<(&Transform, &PadVelocity)>,
-              pad_acceleration: Query<(&Transform, &PadAcceleration)>,
-              shredder_q: Query<(&Transform, &Shredder)>,
-              ) {
-    let mut save_container = SaveContainer::new();
-
-    for e in save_world_er.iter() {
-        let file = &e.0;
-        println!("received event: {}", file);
-
-        for (t, e) in artillery_q.iter() {
-            let mut e = e.clone();
-            e.scale = t.scale.truncate().x;
-            e.position = t.translation.truncate();
-            save_container.artillery.push(e.clone());
-        }
-
-        for (t, e) in block_zombie_q.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.block_zombie.push(e.clone());
-        }
-
-        for (t, e) in converter_body_q.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.converter_body.push(e.clone());
-        }
-
-        for (v, t, e) in gear_simple_q.iter() {
-            let mut e = e.clone();
-            e.scale = t.scale.truncate().x;
-            e.position = t.translation.truncate();
-            e.anglevel = v.angvel;
-            save_container.gear_simple.push(e.clone());
-        }
-
-        for (v, t, e) in gear_sorting_q.iter() {
-            let mut e = e.clone();
-            e.scale = t.scale.truncate().x;
-            e.position = t.translation.truncate();
-            e.anglevel = v.angvel;
-            save_container.gear_sorting.push(e.clone());
-        }
-
-        for (v, t, e) in gear_swirl_q.iter() {
-            let mut e = e.clone();
-            e.scale = t.scale.truncate().x;
-            e.position = t.translation.truncate();
-            e.anglevel = v.angvel;
-            save_container.gear_swirl.push(e.clone());
-        }
-
-        for (t, e) in gate_teleport_entrance.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.gate_teleport_entrance.push(e.clone());
-        }
-
-        for (t, e) in gate_teleport_exit.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.gate_teleport_exit.push(e.clone());
-        }
-
-        for (t, e) in gate_zombie_q.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.gate_zombie.push(e.clone());
-        }
-
-        for (t, e) in gate_zundamon_q.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.gate_zundamon.push(e.clone());
-        }
-
-        for (t, e) in pad_velocity_q.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.pad_velocity.push(e.clone());
-        }
-
-        for (t, e) in pad_acceleration.iter() {
-            let mut e = e.clone();
-            e.size = e.size * t.scale.truncate();
-            e.position = t.translation.truncate();
-            save_container.pad_acceleration.push(e.clone());
-        }
-
-        for (t, e) in shredder_q.iter() {
-            let mut e = e.clone();
-            e.scale = t.scale.truncate().x;
-            save_container.shredder.push(e);
-        }
-
-        std::fs::write(file, serde_json::to_string(&save_container).unwrap()).unwrap();
-        println!("file saved: {}", file);
-    }
-}
-
-fn load_world(
-    mut load_world_er: EventReader<LoadWorldEvent>,
-    mut commands: Commands,
-    game_assets: Res<GameAsset>,
-    image_assets: Res<Assets<Image>>,
-    ) {
-
-    for e in load_world_er.iter() {
-        let file = &e.0;
-        println!("received event: {}", file);
-
-        let json_str = std::fs::read_to_string(file).unwrap();
-        let save_container: SaveContainer = serde_json::from_str(&json_str).unwrap();
-
-        for e in save_container.artillery {
-            cmp_artillery::add(&mut commands, &game_assets, e);
-        }
-
-        for e in save_container.block_zombie {
-            cmp_block_zombie::add(&mut commands, e);
-        }
-
-        for e in save_container.converter_body {
-            cmp_converter_body::add(&mut commands, e);
-        }
-
-        for e in save_container.gear_simple {
-            cmp_gear::add_simple(&mut commands, &game_assets, &image_assets, e);
-        }
-
-        for e in save_container.gear_sorting {
-            cmp_gear::add_sorting(&mut commands, &game_assets, &image_assets, e);
-        }
-
-        for e in save_container.gear_swirl {
-            cmp_gear::add_swirl(&mut commands, &game_assets, &image_assets, e);
-        }
-
-        for e in save_container.gate_teleport_entrance {
-            cmp_gate_teleport::add_entrance(&mut commands, e);
-        }
-
-        for e in save_container.gate_teleport_exit {
-            cmp_gate_teleport::add_exit(&mut commands, e);
-        }
-
-        for e in save_container.gate_zombie {
-            cmp_gate_zombie::add(&mut commands, e);
-        }
-
-        for e in save_container.gate_zundamon {
-            cmp_gate_zundamon::add(&mut commands, e);
-        }
-
-        for e in save_container.pad_velocity {
-            cmp_pad_velocity::add(&mut commands, &game_assets, e);
-        }
-
-        for e in save_container.pad_acceleration {
-            cmp_pad_acceleration::add(&mut commands, &game_assets, e);
-        }
-
-        for e in save_container.shredder {
-            cmp_shredder::add(&mut commands, &game_assets, e);
-        }
-
-        //println!("{:?}", save_container);
-    }
-}
 
 fn load_font(game_assets: &mut GameAsset, font_assets: &mut Assets<Font>, font_bytes: &[u8], name: &str) {
     let source = Font::try_from_bytes(font_bytes.into()).unwrap();
@@ -1045,6 +879,17 @@ fn spawn_map_object (
 
 }
 
+fn mkdir_if_not_exist(directory_path: &str) {
+    use std::fs;
+    if let Err(err) = fs::metadata(&directory_path) {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            fs::create_dir(&directory_path).unwrap();
+        } else {
+            panic!("unknown error");
+        }
+    }
+}
+
 fn game_mode_select (
     mut save_world_ew: EventWriter<SaveWorldEvent>,
     mut load_world_ew: EventWriter<LoadWorldEvent>,
@@ -1055,11 +900,11 @@ fn game_mode_select (
     ){
 
     if load_json_path.is_none() {
-        *load_json_path = Some("assets/map.json".to_string());
+        *load_json_path = Some("assets/map".to_string());
     }
 
     if save_json_path.is_none() {
-        *save_json_path = Some("assets/map.json".to_string());
+        *save_json_path = Some("assets/map".to_string());
     }
 
     egui::Window::new("GameControl").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
@@ -1067,7 +912,10 @@ fn game_mode_select (
             ui.label("Save");
             ui.text_edit_singleline(save_json_path.as_mut().unwrap());
             if ui.button("o").clicked() {
-                save_world_ew.send(SaveWorldEvent(save_json_path.clone().unwrap()));
+                if let Some(ref directory_path) = *save_json_path {
+                    mkdir_if_not_exist(directory_path.as_str());
+                    save_world_ew.send(SaveWorldEvent(save_json_path.clone().unwrap()));
+                }
             }
         });
 

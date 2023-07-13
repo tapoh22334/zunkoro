@@ -99,4 +99,77 @@ pub fn system(
     }
 }
 
+const FILE_NAME_ENTRANCE: &str = "/gate_teleport_entrance.map";
+const FILE_NAME_EXIT: &str = "/gate_teleport_exit.map";
+
+use crate::ev_save_load_world::LoadWorldEvent;
+pub fn load(
+    mut load_world_er: EventReader<LoadWorldEvent>,
+    mut commands: Commands,
+    ) {
+
+    for e in load_world_er.iter() {
+        {
+            let dir = e.0.clone();
+
+            let json_str = std::fs::read_to_string(dir + FILE_NAME_ENTRANCE);
+            if let Ok(json_str) = json_str {
+                let elem_list: Vec<GateTeleportEntrance> = serde_json::from_str(&json_str).unwrap();
+
+                for e in elem_list {
+                    add_entrance(&mut commands, e);
+                }
+            }
+        }
+        {
+            let dir = e.0.clone();
+
+            let json_str = std::fs::read_to_string(dir + FILE_NAME_EXIT);
+            if let Ok(json_str) = json_str {
+                let elem_list: Vec<GateTeleportExit> = serde_json::from_str(&json_str).unwrap();
+
+                for e in elem_list {
+                    add_exit(&mut commands, e);
+                }
+            }
+        }
+    }
+}
+
+
+use crate::ev_save_load_world::SaveWorldEvent;
+pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
+              gate_teleport_entrance: Query<(&Transform, &GateTeleportEntrance)>,
+              gate_teleport_exit: Query<(&Transform, &GateTeleportExit)>,
+              ) {
+    for e in save_world_er.iter() {
+        {
+            let dir = e.0.clone();
+            let mut elem_list: Vec<GateTeleportEntrance> = vec![];
+
+            for (t, e) in gate_teleport_entrance.iter() {
+                let mut e = e.clone();
+                e.size = e.size * t.scale.truncate();
+                e.position = t.translation.truncate();
+                elem_list.push(e.clone());
+            }
+
+            std::fs::write(dir + FILE_NAME_ENTRANCE, serde_json::to_string(&elem_list).unwrap()).unwrap();
+        }
+
+        {
+            let dir = e.0.clone();
+            let mut elem_list: Vec<GateTeleportExit> = vec![];
+
+            for (t, e) in gate_teleport_exit.iter() {
+                let mut e = e.clone();
+                e.size = e.size * t.scale.truncate();
+                e.position = t.translation.truncate();
+                elem_list.push(e.clone());
+            }
+
+            std::fs::write(dir + FILE_NAME_EXIT, serde_json::to_string(&elem_list).unwrap()).unwrap();
+        }
+    }
+}
 

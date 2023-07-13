@@ -65,3 +65,47 @@ pub fn system(
     }
 }
 
+
+const FILE_NAME: &str = "/pad_velocity.map";
+use crate::ev_save_load_world::LoadWorldEvent;
+pub fn load(
+    mut load_world_er: EventReader<LoadWorldEvent>,
+    mut commands: Commands,
+    game_assets: Res<GameAsset>,
+    ) {
+
+    for e in load_world_er.iter() {
+        let dir = e.0.clone();
+
+        let json_str = std::fs::read_to_string(dir + FILE_NAME);
+        if let Ok(json_str) = json_str {
+            let elem_list: Vec<PadVelocity> = serde_json::from_str(&json_str).unwrap();
+
+            for e in elem_list {
+                add(&mut commands, &game_assets, e);
+            }
+        }
+    }
+}
+
+
+use crate::ev_save_load_world::SaveWorldEvent;
+pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
+              q: Query<(&Transform, &PadVelocity)>,
+              ) {
+
+    for e in save_world_er.iter() {
+        let dir = e.0.clone();
+        let mut elem_list: Vec<PadVelocity> = vec![];
+
+        for (t, e) in q.iter() {
+            let mut e = e.clone();
+            e.size = e.size * t.scale.truncate();
+            e.position = t.translation.truncate();
+            elem_list.push(e.clone());
+        }
+
+        std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();
+    }
+}
+
