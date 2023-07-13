@@ -6,8 +6,7 @@ use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball_zombie;
 use crate::cmp_fuse_time::FuseTime;
 
-const BALL_SIZE: f32 = 20.0;
-const START_TIME_SEC: f32 = 15.0;
+const BALL_SIZE: f32 = 30.0;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct GateZombie {

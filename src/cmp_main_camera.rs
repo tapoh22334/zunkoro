@@ -188,7 +188,7 @@ fn find_bottom(
 use bevy::window::PrimaryWindow;
 const AUTO_CAMERA_VERTICAL_K: f32 = 0.08;
 const AUTO_CAMERA_VERTICAL_D: f32 = 0.3;
-const AUTO_CAMERA_VERTICAL_POS_RATIO: f32 = 0.65;
+const AUTO_CAMERA_VERTICAL_POS_RATIO: f32 = 0.8;
 
 pub fn auto_camera_vertical(
     windows_q: Query<&Window, With<PrimaryWindow>>,

@@ -824,7 +824,7 @@ fn handle_user_input(
                                     position: world_position,
                                     remain: 5,
                                     prob: 0.5,
-                                    spawn_offset_sec: 0.0,
+                                    spawn_offset_sec: 15.0,
                                 };
                                 let entity = cmp_gate_zombie::add(&mut commands, gz);
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
