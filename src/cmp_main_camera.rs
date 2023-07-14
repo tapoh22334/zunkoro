@@ -1,7 +1,4 @@
-use std::thread::current;
-
 use bevy::prelude::*;
-use bevy_rapier2d::prelude::*;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::input::mouse::MouseWheel;
@@ -113,7 +110,7 @@ pub fn auto_camera(
         return;
     }
 
-    let (mut projection, mut cam_transform) = q.single_mut();
+    let (mut _projection, mut cam_transform) = q.single_mut();
 
     // Transition focus
     let (t1_e, t2_e) = find_nearest_pair(&zombie_q, &zundamon_q);

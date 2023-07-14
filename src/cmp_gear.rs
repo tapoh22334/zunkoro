@@ -140,8 +140,8 @@ fn add_gear(commands: &mut Commands,
 
 
 const FILE_NAME_SIMPLE: &str = "/gear_simple.map";
-const FILE_NAME_SORTING: &str = "/gear_SORTING.map";
-const FILE_NAME_SWIRL: &str = "/gear_SWIRL.map";
+const FILE_NAME_SORTING: &str = "/gear_sorting.map";
+const FILE_NAME_SWIRL: &str = "/gear_swirl.map";
 
 use crate::ev_save_load_world::LoadWorldEvent;
 pub fn load(

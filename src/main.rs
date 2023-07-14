@@ -1,12 +1,7 @@
-use bevy_rapier2d::rapier::prelude::IntegrationParameters;
-use constants::C_MAP_FRICTION;
 //#![windows_subsystem = "windows"]
-use serde::{Serialize, Deserialize};
 use rand::prelude::*;
 
 use bevy::prelude::*;
-use bevy::input::mouse::MouseWheel;
-use bevy::input::mouse::MouseMotion;
 use bevy::window::PrimaryWindow;
 use bevy::render::texture::{ImageType, CompressedImageFormats};
 use bevy::sprite::collide_aabb::collide;
@@ -19,6 +14,12 @@ use bevy_inspector_egui::prelude::*;
 use bevy_prototype_lyon::prelude::*;
 
 mod constants;
+
+mod bdl_rotating_shape;
+use bdl_rotating_shape::RotatingShapeBundle;
+
+mod bdl_vibrating_shape;
+use bdl_vibrating_shape::VibratingShapeBundle;
 
 mod cmp_artillery;
 use crate::cmp_artillery::Artillery;
@@ -67,6 +68,9 @@ mod cmp_primitive_shape;
 use crate::cmp_primitive_shape::PrimitiveShape;
 use crate::cmp_primitive_shape::PrimitiveShapeBundle;
 
+mod cmp_rotator;
+use crate::cmp_rotator::Rotator;
+
 mod cmp_shredder;
 use crate::cmp_shredder::Shredder;
 
@@ -96,11 +100,12 @@ pub struct Map;
 #[reflect(Resource, InspectorOptions)]
 enum EditTool { #[default] Select,
                 Translate,
+                Rotate,
                 Scale,
                 ScaleDistort,
                 }
 
-#[derive(Resource, Reflect, FromReflect, Clone, PartialEq, Debug, Default, InspectorOptions)]
+#[derive(Component, Resource, Reflect, FromReflect, Clone, PartialEq, Debug, Default, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
 enum MapObject {
     #[default]None,
@@ -116,7 +121,9 @@ enum MapObject {
     PadVelocity(Option<Vec2>),
     PadAcceleration(Option<Vec2>),
     PrimitiveShape(cmp_primitive_shape::Shape),
+    RotatingShape(cmp_primitive_shape::Shape),
     Shredder(Vec<Entity>, Vec<Vec2>),
+    VibratingShape(cmp_primitive_shape::Shape),
 }
 
 #[derive(Resource, Reflect, Clone, PartialEq, Debug, InspectorOptions)]
@@ -138,7 +145,7 @@ enum AppState { #[default] Edit, Game}
 fn main() {
 //use bevy_inspector_egui::quick::WorldInspectorPlugin;
 //use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
-use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+//use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -154,13 +161,13 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_plugin(ShapePlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0))
         //.add_plugin(bevy_framepace::FramepacePlugin)
+        //.add_system(set_framerate.on_startup())
         .insert_resource(GameAsset::default())
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
         //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
         //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
-        //.add_system(set_framerate.on_startup())
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
         .add_system(setup_fonts.on_startup())
@@ -174,6 +181,12 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .add_event::<SaveWorldEvent>()
         .add_event::<LoadWorldEvent>()
+
+        .add_system(bdl_rotating_shape::load)
+        .add_system(bdl_rotating_shape::save)
+
+        .add_system(bdl_vibrating_shape::load)
+        .add_system(bdl_vibrating_shape::save)
 
         //.add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
@@ -230,6 +243,9 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .register_type::<PrimitiveShape>()
         .add_system(cmp_primitive_shape::load)
         .add_system(cmp_primitive_shape::save)
+
+        .register_type::<Rotator>()
+        .add_system(cmp_rotator::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<Shredder>()
         .add_system(cmp_shredder::load)
@@ -471,7 +487,8 @@ fn handle_user_input(
                         *edit_context = EditContext::Edit(pick, EditTool::Select);
                     } else if keys.pressed(KeyCode::T) {
                         *edit_context = EditContext::Edit(pick, EditTool::Translate);
-
+                    } else if keys.pressed(KeyCode::R) {
+                        *edit_context = EditContext::Edit(pick, EditTool::Rotate);
                     } else if keys.pressed(KeyCode::S) {
                         *edit_context = EditContext::Edit(pick, EditTool::Scale);
                     } else if edit_tool == EditTool::Scale && keys.pressed(KeyCode::D) {
@@ -488,6 +505,17 @@ fn handle_user_input(
                             if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
                                 transform.translation.x = world_position.x;
                                 transform.translation.y = world_position.y;
+                            }
+                        }
+                    }
+
+                    EditTool::Rotate => {
+                        if let Some(entity) = pick {
+                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
+                                let pos = transform.translation.truncate();
+                                let dir = (world_position - pos).normalize();
+                                let angle = Vec2::new(0.0, 1.0).angle_between(dir);
+                                transform.rotation = Quat::from_rotation_z(angle);
                             }
                         }
                     }
@@ -704,13 +732,32 @@ fn handle_user_input(
                                 let primitive_shape = PrimitiveShape {
                                     shape,
                                     scale: 1.0,
-                                    position: world_position
+                                    position: world_position,
+                                    ..default()
                                 };
                                 //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
                                 let entity = commands.spawn(PrimitiveShapeBundle::from(primitive_shape)).id();
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
+
+                        MapObject::RotatingShape(shape) => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let rotator = Rotator {
+                                    angvel: 1.5,
+                                };
+                                let primitive_shape = PrimitiveShape {
+                                    shape,
+                                    scale: 1.0,
+                                    position: world_position,
+                                    ..default()
+                                };
+                                //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
+                                let entity = commands.spawn(RotatingShapeBundle::from((rotator, primitive_shape))).id();
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
 
                         MapObject::Shredder(entities, polyline) => {
                             if buttons.just_pressed(MouseButton::Left) {
@@ -755,6 +802,29 @@ fn handle_user_input(
                             }
 
                         }
+
+                        MapObject::VibratingShape(shape) => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let distance = cmp_primitive_shape::DEFAULT_SIZE_X;
+                                let speed = 100.0;
+
+                                let vibrator = Vibrator {
+                                    direction: cmp_vibrator::Direction::Horizontal,
+                                    speed,
+                                    range: (world_position.x - distance, world_position.x + distance)
+                                };
+                                let primitive_shape = PrimitiveShape {
+                                    shape,
+                                    scale: 1.0,
+                                    position: world_position,
+                                    ..default()
+                                };
+                                //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
+                                let entity = commands.spawn(VibratingShapeBundle::from((vibrator, primitive_shape))).id();
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
 
                         _ => {}
                     }
@@ -885,12 +955,67 @@ fn spawn_map_object (
         });
 
         ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Rot Box");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::RotatingShape(cmp_primitive_shape::Shape::SBox));
+            }
+
+            ui.label("Rot Circle");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::RotatingShape(cmp_primitive_shape::Shape::SCircle));
+            }
+
+            ui.label("Rot Dia");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::RotatingShape(cmp_primitive_shape::Shape::SDia));
+            }
+
+            ui.label("Rot Star");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::RotatingShape(cmp_primitive_shape::Shape::SStar));
+            }
+
+            ui.label("Rot Triangle");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::RotatingShape(cmp_primitive_shape::Shape::STriangle));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Shredder");
             if ui.button("Spawn").clicked() {
                 info!("Shredder spawned");
                 *edit_mode = EditContext::Spawn(MapObject::Shredder(Vec::new(), Vec::new()));
             }
         });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Vib Box");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::VibratingShape(cmp_primitive_shape::Shape::SBox));
+            }
+
+            ui.label("Vib Circle");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::VibratingShape(cmp_primitive_shape::Shape::SCircle));
+            }
+
+            ui.label("Vib Dia");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::VibratingShape(cmp_primitive_shape::Shape::SDia));
+            }
+
+            ui.label("Vib Star");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::VibratingShape(cmp_primitive_shape::Shape::SStar));
+            }
+
+            ui.label("Vib Triangle");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::VibratingShape(cmp_primitive_shape::Shape::STriangle));
+            }
+        });
+
     });
 
 }

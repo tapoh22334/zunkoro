@@ -59,8 +59,6 @@ use crate::ev_save_load_world::LoadWorldEvent;
 pub fn load(
     mut load_world_er: EventReader<LoadWorldEvent>,
     mut commands: Commands,
-    game_assets: Res<GameAsset>,
-    image_assets: Res<Assets<Image>>,
     ) {
 
     for e in load_world_er.iter() {

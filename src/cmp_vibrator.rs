@@ -26,6 +26,8 @@ pub fn system(
                     v.linvel.y = vb.speed;
                 } else if t.translation.y >= vb.range.1 {
                     v.linvel.y = -vb.speed;
+                } else if v.linvel.y == 0.0 {
+                    v.linvel.y = vb.speed;
                 }
             }
 
@@ -34,7 +36,10 @@ pub fn system(
                     v.linvel.x = vb.speed;
                 } else if t.translation.x >= vb.range.1 {
                     v.linvel.x = -vb.speed;
+                } else if v.linvel.x == 0.0 {
+                    v.linvel.x = vb.speed;
                 }
+
             }
 
         }

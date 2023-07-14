@@ -6,6 +6,7 @@ use bevy_prototype_lyon::prelude::*;
 
 use crate::BBSize;
 use crate::constants;
+use crate::ev_save_load_world::Derrived;
 
 #[derive(Default, Component, Reflect, FromReflect, Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 pub enum Shape {
@@ -21,6 +22,7 @@ pub enum Shape {
 pub struct PrimitiveShape {
     pub shape: Shape,
     pub position: Vec2,
+    pub rotation: Quat,
     pub scale: f32,
 }
 
@@ -37,8 +39,8 @@ pub struct PrimitiveShapeBundle {
     shape_bundle: ShapeBundle,
 }
 
-const DEFAULT_SIZE_X: f32 = 64.0;
-const DEFAULT_SIZE_Y: f32 = 64.0;
+pub const DEFAULT_SIZE_X: f32 = 64.0;
+pub const DEFAULT_SIZE_Y: f32 = 64.0;
 
 impl Default for PrimitiveShapeBundle {
     fn default() -> Self {
@@ -149,7 +151,7 @@ pub fn load(
 
 use crate::ev_save_load_world::SaveWorldEvent;
 pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &PrimitiveShape)>
+              q: Query<(&Transform, &PrimitiveShape), Without<Derrived>>
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
@@ -159,6 +161,7 @@ pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
             let mut e = e.clone();
             e.position = t.translation.truncate();
             e.scale = t.scale.truncate().x;
+            e.rotation = t.rotation;
             elem_list.push(e.clone());
         }
 
