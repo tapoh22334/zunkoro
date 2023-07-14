@@ -10,7 +10,6 @@ pub struct Rotator {
 pub fn system(
     mut q: Query<(&mut Transform, &mut Velocity, &Rotator)>,
 ) {
-    println!("set angvel");
     for (t, mut v, r) in q.iter_mut() {
         if v.angvel == 0.0 {
             v.angvel = r.angvel;

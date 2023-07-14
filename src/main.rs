@@ -166,7 +166,7 @@ fn main() {
         .insert_resource(EditContext::Edit(None, EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
         //.add_plugin(ResourceInspectorPlugin::<EditContext>::default())
-        //.add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
@@ -374,43 +374,68 @@ fn load_map_polyline() -> Vec<Vec<Vec2>> {
     return map;
 }
 
+fn normalize_factor(polyline: Vec<Vec2>) -> (Vec2, Vec2) {
+    let mut left_bottom = Vec2::new(std::f32::MAX, std::f32::MAX);
+    let mut right_top = Vec2::new(std::f32::MIN, std::f32::MIN);
+
+    for point in polyline {
+        if point.x < left_bottom.x {
+            left_bottom.x = point.x;
+        }
+
+        if point.x > right_top.x {
+            right_top.x = point.x;
+        }
+
+        if point.y < left_bottom.y {
+            left_bottom.y = point.y;
+        }
+
+        if point.y > right_top.y {
+            right_top.y = point.y;
+        }
+    }
+
+    let translation = (right_top + left_bottom) / 2.0;
+    let bbsize = right_top - left_bottom;
+
+    println!("{:?}, {:?}", translation, bbsize);
+
+    return (translation, bbsize);
+}
+
 fn add_map(commands: &mut Commands) {
-    let polylines = load_map_polyline();
-    let mut colliders = vec![];
-    let mut shapes = vec![];
+    let mut polylines = load_map_polyline();
+    let mut params = vec![];
 
-    for polyline in polylines {
-        colliders.push(Collider::polyline(polyline.clone(), None));
+    for mut polyline in polylines {
+        let (translation, bbsize) = normalize_factor(polyline.clone());
+        polyline.iter_mut().for_each(|x: &mut Vec2| *x = *x - translation);
+
+        let collider = Collider::polyline(polyline.clone(), None);
         let polygon = shapes::Polygon {points: polyline, closed: false};
-        shapes.push(polygon);
+
+        params.push((collider, polygon, translation, bbsize))
     }
 
-    let mut entity = commands.spawn(Map);
-    entity
-        .insert(TransformBundle {
-            ..default()
-        })
-        .insert(ShapeBundle {
-            ..default()
-        },)
-    ;
-
-    for (collider, shape) in colliders.into_iter().zip(shapes.into_iter()) {
-        entity.with_children(|children| {
-
-            children.spawn(collider)
-                .insert(Restitution::coefficient(constants::C_MAP_RESTITUTION))
-                .insert(Friction::coefficient(constants::C_MAP_FRICTION))
-                .insert(ShapeBundle {
-                    path: GeometryBuilder::build_as(&shape),
+    for (collider, shape, translation, bbsize) in params {
+        let mut entity = commands.spawn(Map);
+        entity
+            .insert(collider)
+            .insert(Restitution::coefficient(constants::C_MAP_RESTITUTION))
+            .insert(Friction::coefficient(constants::C_MAP_FRICTION))
+            .insert(ShapeBundle {
+                path: GeometryBuilder::build_as(&shape),
+                transform: Transform {
+                    translation: Vec3::from((translation, 0.0)),
                     ..default()
-                })
-                .insert(Fill::color(Color::BLACK))
-                .insert(Stroke::new(Color::BLACK, 1.0));
-
-        });
+                },
+                ..default()
+            })
+            .insert(Fill::color(Color::BLACK))
+            .insert(Stroke::new(Color::BLACK, 1.0))
+            .insert(BBSize { x: bbsize.x, y: bbsize.y });
     }
-
 
 }
 
@@ -425,7 +450,6 @@ fn setup_physics(mut commands: Commands,
 
     /* Create the ground. */
     println!("setup map");
-    add_map(&mut commands);
     println!("end setup map");
 }
 
@@ -1032,6 +1056,7 @@ fn mkdir_if_not_exist(directory_path: &str) {
 }
 
 fn game_mode_select (
+    mut commands: Commands,
     mut save_world_ew: EventWriter<SaveWorldEvent>,
     mut load_world_ew: EventWriter<LoadWorldEvent>,
     mut egui_contexts: EguiContexts,
@@ -1049,6 +1074,13 @@ fn game_mode_select (
     }
 
     egui::Window::new("GameControl").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Add map");
+            if ui.button("o").clicked() {
+                add_map(&mut commands);
+            }
+        });
+
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Save");
             ui.text_edit_singleline(save_json_path.as_mut().unwrap());
