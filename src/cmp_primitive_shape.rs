@@ -7,8 +7,9 @@ use bevy_prototype_lyon::prelude::*;
 use crate::BBSize;
 use crate::constants;
 
-#[derive(Component, Reflect, FromReflect, Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[derive(Default, Component, Reflect, FromReflect, Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 pub enum Shape {
+    #[default]
     SBox,
     SCircle,
     SDia,
@@ -16,14 +17,90 @@ pub enum Shape {
     STriangle,
 }
 
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+#[derive(Default, Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct PrimitiveShape {
     pub shape: Shape,
     pub position: Vec2,
     pub scale: f32,
 }
 
-pub fn load_shape_polyline(s: Shape) -> Vec<Vec<Vec2>> {
+#[derive(Bundle)]
+pub struct PrimitiveShapeBundle {
+    primitive_shape: PrimitiveShape,
+    collider: Collider,
+    restitution: Restitution,
+    friction: Friction,
+    color: Fill,
+    stroke: Stroke,
+    bbsize: BBSize,
+    #[bundle]
+    shape_bundle: ShapeBundle,
+}
+
+const DEFAULT_SIZE_X: f32 = 64.0;
+const DEFAULT_SIZE_Y: f32 = 64.0;
+
+impl Default for PrimitiveShapeBundle {
+    fn default() -> Self {
+        let shape = Shape::SBox;
+        let polygon = shapes::Polygon {
+            points: load_shape_polyline(shape),
+            closed: false
+        };
+
+        Self {
+            primitive_shape: PrimitiveShape {
+                ..default()
+            },
+            collider: Collider::polyline(load_shape_polyline(shape), None),
+            restitution: Restitution::coefficient(constants::C_MAP_RESTITUTION),
+            friction: Friction::coefficient(constants::C_MAP_FRICTION),
+            color: Fill::color(Color::BLACK),
+            stroke: Stroke::new(Color::BLACK, 1.0),
+            bbsize: BBSize{x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y},
+            shape_bundle: ShapeBundle{
+                path: GeometryBuilder::build_as(&polygon),
+                transform: Transform {
+                    ..default()
+                },
+                ..default()
+            },
+
+        }
+    }
+}
+
+impl From<PrimitiveShape> for PrimitiveShapeBundle {
+    fn from(primitive_shape: PrimitiveShape) -> Self {
+        println!("from primitive shape");
+        let shape = primitive_shape.shape.clone();
+        let position = primitive_shape.position.clone();
+        let scale = primitive_shape.scale.clone();
+        let polyline = load_shape_polyline(shape);
+        let polygon = shapes::Polygon {points: polyline.clone(), closed: false};
+
+        Self {
+            primitive_shape,
+            collider: Collider::polyline(polyline, None),
+            bbsize: BBSize {
+                x: DEFAULT_SIZE_X * scale, y: DEFAULT_SIZE_Y * scale
+            },
+            shape_bundle: ShapeBundle {
+                path: GeometryBuilder::build_as(&polygon),
+                transform: Transform {
+                    translation: Vec3::from((position, 0.0)),
+                    scale: Vec3::ONE * scale,
+                    ..default()
+                },
+                ..default()
+            },
+            ..default()
+        }
+    }
+}
+
+
+fn load_shape_polyline(s: Shape) -> Vec<Vec2> {
     let map_file = match s {
         Shape::SBox => {
             include_bytes!("../assets/map_element/primitive_64_box.map").as_slice()
@@ -45,39 +122,7 @@ pub fn load_shape_polyline(s: Shape) -> Vec<Vec<Vec2>> {
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
 
-    return map[0];
-}
-
-
-pub fn add(commands: &mut Commands, primitive_shape: PrimitiveShape) -> Entity {
-    let shape = primitive_shape.shape.clone();
-    let position = primitive_shape.position.clone();
-    let scale = primitive_shape.scale.clone();
-
-    let polyline = load_shape_polyline(shape);
-
-    let shape = shapes::Polygon {points: polyline.clone(), closed: false};
-
-    let mut entity = commands.spawn(primitive_shape);
-    entity
-        .insert(Collider::polyline(polyline, None))
-        .insert(Restitution::coefficient(constants::C_MAP_RESTITUTION))
-        .insert(Friction::coefficient(constants::C_MAP_FRICTION))
-        .insert(ShapeBundle {
-            path: GeometryBuilder::build_as(&shape),
-            transform: Transform {
-                translation: Vec3::from((position, 0.0)),
-                scale: Vec3::ONE * scale,
-                ..default()
-            },
-            ..default()
-        })
-        .insert(Fill::color(Color::BLACK))
-        .insert(Stroke::new(Color::BLACK, 1.0))
-        .insert(BBSize{x: 64.0 * scale, y: 64.0 * scale})
-    ;
-
-    return entity.id();
+    return map.iter().next().unwrap().clone();
 }
 
 
@@ -96,7 +141,7 @@ pub fn load(
             let elem_list: Vec<PrimitiveShape> = serde_json::from_str(&json_str).unwrap();
 
             for e in elem_list {
-                add(&mut commands, e);
+                commands.spawn(PrimitiveShapeBundle::from(e));
             }
         }
     }

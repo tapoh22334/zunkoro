@@ -8,26 +8,33 @@ use crate::cmp_primitive_shape;
 use crate::cmp_vibrator;
 use crate::constants;
 
-#[derive(Default, Bundle, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct VibratingShape {
     pub vibrator: Vibrator,
     pub primitive_shape: PrimitiveShape,
-    pub polyline: Collider::polyline,
-    pub restitution: Restitution::coefficient,
-    pub friction: Friction::coefficient,
-    pub fill: Fill,
-    pub stroke: Stroke,
-    pub bbsize: BBSize,
-
-    #[bundle]
-    pub shape_bundle: ShapeBundle,
 }
 
+#[derive(Default, Bundle, Reflect, Clone, Serialize, Deserialize, Debug)]
+pub struct VibratingShapeBundle{
+    pub vibrator: Vibrator,
+    #[bundle]
+    pub primitive_shape_bundle: PrimitiveShapeBundle,
+}
 
-pub fn add(commands: &mut Commands, vibrating_shape: VibratingShape) -> Entity {
-    let mut entity = commands.spawn(vibrating_shape);
+impl Default for VibratingShapeBundle {
+    fn default() -> Self {
+        Self {
+            vibrator: Vibrator::default(),
+            primitive_shape_bundle: PrimitiveShapeBundle::Default(),
+        }
+    }
+}
 
-    return entity.id();
+impl From<VibratingShape> for VibratingShapeBundle {
+    fn from(vibrating_shape) -> Self {
+        Self {
+            ..default(),
+        }
+    }
 }
 
 
@@ -43,10 +50,10 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<PrimitiveShape> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(Vibrator, PrimitiveShape)> = serde_json::from_str(&json_str).unwrap();
 
             for e in elem_list {
-                add(&mut commands, e);
+                commands.spawn(VibratingShapeBundle::from(()))
             }
         }
     }
@@ -54,17 +61,17 @@ pub fn load(
 
 use crate::ev_save_load_world::SaveWorldEvent;
 pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &PrimitiveShape)>
+              q: Query<(&Transform, &Vibrator, &PrimitiveShape)>
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<PrimitiveShape> = vec![];
+        let mut elem_list: Vec<(Vibrator, PrimitiveShape)> = vec![];
 
-        for (t, e) in q.iter() {
+        for (t, e1, e2) in q.iter() {
             let mut e = e.clone();
-            e.position = t.translation.truncate();
-            e.scale = t.scale.truncate().x;
-            elem_list.push(e.clone());
+            e2.position = t.translation.truncate();
+            e2.scale = t.scale.truncate().x;
+            elem_list.push((e1.clone(), e2.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();

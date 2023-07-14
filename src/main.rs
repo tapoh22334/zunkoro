@@ -65,13 +65,13 @@ use crate::cmp_pad_acceleration::PadAcceleration;
 
 mod cmp_primitive_shape;
 use crate::cmp_primitive_shape::PrimitiveShape;
+use crate::cmp_primitive_shape::PrimitiveShapeBundle;
 
 mod cmp_shredder;
 use crate::cmp_shredder::Shredder;
 
 mod cmp_vibrator;
-use crate::cmp_vibrator::HorizontalVibrator;
-use crate::cmp_vibrator::VerticalVibrator;
+use crate::cmp_vibrator::Vibrator;
 
 mod cmp_trajectory;
 use crate::cmp_trajectory::Trajectory;
@@ -240,8 +240,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .register_type::<Trajectory>()
         .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))
 
-        .register_type::<VerticalVibrator>
-        .register_type::<HorizontalVibrator>
+        .register_type::<Vibrator>()
         .add_system(cmp_vibrator::system.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
@@ -707,7 +706,8 @@ fn handle_user_input(
                                     scale: 1.0,
                                     position: world_position
                                 };
-                                let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
+                                //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
+                                let entity = commands.spawn(PrimitiveShapeBundle::from(primitive_shape)).id();
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }

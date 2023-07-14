@@ -1,17 +1,15 @@
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-use crate::cmp_bbsize::BBSize;
-use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball::Ball;
 
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+#[derive(Default, Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub enum Direction {
+    #[default]
     Vertical,
     Horizontal,
 }
 
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+#[derive(Default, Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct Vibrator {
     pub direction: Direction,
     pub speed: f32,
@@ -19,23 +17,23 @@ pub struct Vibrator {
 }
 
 pub fn system(
-    mut q: Query<(&mut Transform, &mut Velocity, VerticalVibrator)>,
+    mut q: Query<(&mut Transform, &mut Velocity, &Vibrator)>,
 ) {
-    for (mut t, mut v, vv) in q.iter_mut() {
-        match (vv.direction) {
-            Vertical => {
-                if t.translation.y <= vv.range.0 {
-                    v.linvel.y = vv.speed;
-                } else if t.translation.y >= vv.range.1 {
-                    v.linvel.y = -vv.speed;
+    for (t, mut v, vb) in q.iter_mut() {
+        match vb.direction {
+            Direction::Vertical => {
+                if t.translation.y <= vb.range.0 {
+                    v.linvel.y = vb.speed;
+                } else if t.translation.y >= vb.range.1 {
+                    v.linvel.y = -vb.speed;
                 }
             }
 
-            Horizontal => {
-                if t.translation.x <= vv.range.0 {
-                    v.linvel.x = vv.speed;
-                } else if t.translation.x >= vv.range.1 {
-                    v.linvel.x = -vv.speed;
+            Direction::Horizontal => {
+                if t.translation.x <= vb.range.0 {
+                    v.linvel.x = vb.speed;
+                } else if t.translation.x >= vb.range.1 {
+                    v.linvel.x = -vb.speed;
                 }
             }
 
