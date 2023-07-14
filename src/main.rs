@@ -64,6 +64,10 @@ use crate::cmp_pad_velocity::PadVelocity;
 mod cmp_pad_acceleration;
 use crate::cmp_pad_acceleration::PadAcceleration;
 
+mod cmp_polygonal_shape;
+use crate::cmp_polygonal_shape::PolygonalShape;
+use crate::cmp_polygonal_shape::PolygonalShapeBundle;
+
 mod cmp_primitive_shape;
 use crate::cmp_primitive_shape::PrimitiveShape;
 use crate::cmp_primitive_shape::PrimitiveShapeBundle;
@@ -173,7 +177,8 @@ fn main() {
         .add_system(setup_fonts.on_startup())
 
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
-        .add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
+        //.add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
+        .add_system(game_mode_select)
         .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit)))
 
@@ -239,6 +244,10 @@ fn main() {
         .add_system(cmp_pad_acceleration::load)
         .add_system(cmp_pad_acceleration::save)
         .add_system(cmp_pad_acceleration::system.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<PolygonalShape>()
+        .add_system(cmp_polygonal_shape::load)
+        .add_system(cmp_polygonal_shape::save)
 
         .register_type::<PrimitiveShape>()
         .add_system(cmp_primitive_shape::load)
@@ -355,26 +364,22 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     }
 }
 
+
 fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
     cmp_zunda_counter::add(commands, game_assets);
 }
 
+
 fn load_map_polyline() -> Vec<Vec<Vec2>> {
     let map_file = include_bytes!("../assets/map_mini2.map");
-    //let map_file = include_bytes!("../assets/map6.map");
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
-
-    for lines in &map {
-        for line in lines {
-            debug!("x: {}, y: {}", line.x, line.y);
-        }
-    }
 
     return map;
 }
 
-fn normalize_factor(polyline: Vec<Vec2>) -> (Vec2, Vec2) {
+
+fn center(polyline: &Vec<Vec2>) -> Vec2 {
     let mut left_bottom = Vec2::new(std::f32::MAX, std::f32::MAX);
     let mut right_top = Vec2::new(std::f32::MIN, std::f32::MIN);
 
@@ -397,47 +402,28 @@ fn normalize_factor(polyline: Vec<Vec2>) -> (Vec2, Vec2) {
     }
 
     let translation = (right_top + left_bottom) / 2.0;
-    let bbsize = right_top - left_bottom;
 
-    println!("{:?}, {:?}", translation, bbsize);
-
-    return (translation, bbsize);
+    return translation;
 }
+
 
 fn add_map(commands: &mut Commands) {
     let mut polylines = load_map_polyline();
-    let mut params = vec![];
 
     for mut polyline in polylines {
-        let (translation, bbsize) = normalize_factor(polyline.clone());
+        let translation = center(&polyline);
         polyline.iter_mut().for_each(|x: &mut Vec2| *x = *x - translation);
 
-        let collider = Collider::polyline(polyline.clone(), None);
-        let polygon = shapes::Polygon {points: polyline, closed: false};
-
-        params.push((collider, polygon, translation, bbsize))
-    }
-
-    for (collider, shape, translation, bbsize) in params {
-        let mut entity = commands.spawn(Map);
-        entity
-            .insert(collider)
-            .insert(Restitution::coefficient(constants::C_MAP_RESTITUTION))
-            .insert(Friction::coefficient(constants::C_MAP_FRICTION))
-            .insert(ShapeBundle {
-                path: GeometryBuilder::build_as(&shape),
-                transform: Transform {
-                    translation: Vec3::from((translation, 0.0)),
+        commands.spawn(PolygonalShapeBundle::from(
+                PolygonalShape {
+                    polygon: polyline,
+                    position: translation,
                     ..default()
-                },
-                ..default()
-            })
-            .insert(Fill::color(Color::BLACK))
-            .insert(Stroke::new(Color::BLACK, 1.0))
-            .insert(BBSize { x: bbsize.x, y: bbsize.y });
+                }
+            ));
     }
-
 }
+
 
 fn setup_physics(mut commands: Commands,
                  mut rapier_configuration: ResMut<RapierConfiguration>) {
@@ -1060,6 +1046,7 @@ fn game_mode_select (
     mut save_world_ew: EventWriter<SaveWorldEvent>,
     mut load_world_ew: EventWriter<LoadWorldEvent>,
     mut egui_contexts: EguiContexts,
+    mut app_state: Res<State<AppState>>,
     mut next_app_state: ResMut<NextState<AppState>>,
     mut load_json_path: Local<Option<String>>,
     mut save_json_path: Local<Option<String>>,
@@ -1073,47 +1060,54 @@ fn game_mode_select (
         *save_json_path = Some("assets/map".to_string());
     }
 
-    egui::Window::new("GameControl").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
-        ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("Add map");
-            if ui.button("o").clicked() {
-                add_map(&mut commands);
-            }
-        });
+    match app_state.0 {
+        AppState::Edit => {
+            egui::Window::new("GameControl").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
+                ui.horizontal(|ui: &mut egui::Ui| {
+                    ui.label("Add map");
+                    if ui.button("o").clicked() {
+                        add_map(&mut commands);
+                    }
+                });
 
-        ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("Save");
-            ui.text_edit_singleline(save_json_path.as_mut().unwrap());
-            if ui.button("o").clicked() {
-                if let Some(ref directory_path) = *save_json_path {
-                    mkdir_if_not_exist(directory_path.as_str());
-                    save_world_ew.send(SaveWorldEvent(save_json_path.clone().unwrap()));
-                }
-            }
-        });
+                ui.horizontal(|ui: &mut egui::Ui| {
+                    ui.label("Save");
+                    ui.text_edit_singleline(save_json_path.as_mut().unwrap());
+                    if ui.button("o").clicked() {
+                        if let Some(ref directory_path) = *save_json_path {
+                            mkdir_if_not_exist(directory_path.as_str());
+                            save_world_ew.send(SaveWorldEvent(save_json_path.clone().unwrap()));
+                        }
+                    }
+                });
 
-        ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("Load");
-            ui.text_edit_singleline(load_json_path.as_mut().unwrap());
-            if ui.button("o").clicked() {
-                load_world_ew.send(LoadWorldEvent(load_json_path.clone().unwrap()));
-            }
-        });
+                ui.horizontal(|ui: &mut egui::Ui| {
+                    ui.label("Load");
+                    ui.text_edit_singleline(load_json_path.as_mut().unwrap());
+                    if ui.button("o").clicked() {
+                        load_world_ew.send(LoadWorldEvent(load_json_path.clone().unwrap()));
+                    }
+                });
 
-        ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("Edit");
-            if ui.button("o").clicked() {
-                next_app_state.set(AppState::Edit);
-            }
-        });
+                ui.horizontal(|ui: &mut egui::Ui| {
+                    ui.label("Edit");
+                    if ui.button("o").clicked() {
+                        next_app_state.set(AppState::Edit);
+                    }
+                });
 
-        ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("Play");
-            if ui.button("o").clicked() {
-                next_app_state.set(AppState::Game);
-            }
-        });
+                ui.horizontal(|ui: &mut egui::Ui| {
+                    ui.label("Play");
+                    if ui.button("o").clicked() {
+                        next_app_state.set(AppState::Game);
+                    }
+                });
 
-    });
+            });
+        }
+        _ => {
+
+        }
+    }
 
 }
