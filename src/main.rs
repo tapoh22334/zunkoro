@@ -1,4 +1,5 @@
 use bevy_rapier2d::rapier::prelude::IntegrationParameters;
+use constants::C_MAP_FRICTION;
 //#![windows_subsystem = "windows"]
 use serde::{Serialize, Deserialize};
 use rand::prelude::*;
@@ -16,6 +17,18 @@ use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy_inspector_egui::prelude::*;
 
 use bevy_prototype_lyon::prelude::*;
+
+mod constants;
+
+mod cmp_artillery;
+use crate::cmp_artillery::Artillery;
+
+mod cmp_bbsize;
+use crate::cmp_bbsize::BBSize;
+
+mod cmp_ball;
+mod cmp_ball_zombie;
+mod cmp_blood;
 
 mod cmp_block_zombie;
 use crate::cmp_block_zombie::BlockZombie;
@@ -36,18 +49,8 @@ use crate::cmp_gate_zundamon::GateZundamon;
 mod cmp_gate_zombie;
 use crate::cmp_gate_zombie::GateZombie;
 
-mod cmp_bbsize;
-use crate::cmp_bbsize::BBSize;
-
 mod cmp_game_asset;
 use crate::cmp_game_asset::GameAsset;
-
-mod cmp_artillery;
-use crate::cmp_artillery::Artillery;
-
-mod cmp_ball;
-mod cmp_ball_zombie;
-mod cmp_blood;
 
 mod cmp_gear;
 use crate::cmp_gear::GearSimple;
@@ -60,8 +63,15 @@ use crate::cmp_pad_velocity::PadVelocity;
 mod cmp_pad_acceleration;
 use crate::cmp_pad_acceleration::PadAcceleration;
 
+mod cmp_primitive_shape;
+use crate::cmp_primitive_shape::PrimitiveShape;
+
 mod cmp_shredder;
 use crate::cmp_shredder::Shredder;
+
+mod cmp_vibrator;
+use crate::cmp_vibrator::HorizontalVibrator;
+use crate::cmp_vibrator::VerticalVibrator;
 
 mod cmp_trajectory;
 use crate::cmp_trajectory::Trajectory;
@@ -81,44 +91,6 @@ use crate::ev_save_load_world::LoadWorldEvent;
 
 #[derive(Component)]
 pub struct Map;
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SaveContainer {
-    artillery: Vec<Artillery>,
-    block_zombie: Vec<BlockZombie>,
-    converter_body: Vec<ConverterBody>,
-    gear_simple: Vec<GearSimple>,
-    gear_sorting: Vec<GearSorting>,
-    gear_swirl: Vec<GearSwirl>,
-    gate_teleport_entrance: Vec<GateTeleportEntrance>,
-    gate_teleport_exit: Vec<GateTeleportExit>,
-    gate_zombie: Vec<GateZombie>,
-    gate_zundamon: Vec<GateZundamon>,
-    pad_velocity: Vec<PadVelocity>,
-    pad_acceleration: Vec<PadAcceleration>,
-    shredder: Vec<Shredder>,
-}
-
-impl SaveContainer {
-    fn new() -> Self {
-        Self {
-            artillery: Vec::new(),
-            block_zombie: Vec::new(),
-            converter_body: Vec::new(),
-            gear_simple: Vec::new(),
-            gear_sorting: Vec::new(),
-            gear_swirl: Vec::new(),
-            gate_teleport_entrance: Vec::new(),
-            gate_teleport_exit: Vec::new(),
-            gate_zombie: Vec::new(),
-            gate_zundamon: Vec::new(),
-            pad_velocity: Vec::new(),
-            pad_acceleration: Vec::new(),
-            shredder: Vec::new(),
-        }
-    }
-}
-
 
 #[derive(Resource, Reflect, FromReflect, Clone, Copy, PartialEq, Debug, Default, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
@@ -143,6 +115,7 @@ enum MapObject {
     GateZundamon,
     PadVelocity(Option<Vec2>),
     PadAcceleration(Option<Vec2>),
+    PrimitiveShape(cmp_primitive_shape::Shape),
     Shredder(Vec<Entity>, Vec<Vec2>),
 }
 
@@ -162,9 +135,6 @@ impl Default for EditContext {
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
 
-const WINDOW_SIZE_Y: f32 = 1920.0;
-const WINDOW_SIZE_X: f32 = 1080.0;
-
 fn main() {
 //use bevy_inspector_egui::quick::WorldInspectorPlugin;
 //use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
@@ -174,8 +144,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Zunda shower".into(),
-                resolution: (WINDOW_SIZE_X, WINDOW_SIZE_Y).into(),
-                //mode: WindowMode::BorderlessFullscreen,
+                resolution: (constants::C_WINDOW_SIZE_X, constants::C_WINDOW_SIZE_Y).into(),
+                //mode: WindowMode::Borderless Fullscreen,
                 ..default()
             }),
             ..default()
@@ -257,6 +227,10 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_pad_acceleration::save)
         .add_system(cmp_pad_acceleration::system.in_set(OnUpdate(AppState::Game)))
 
+        .register_type::<PrimitiveShape>()
+        .add_system(cmp_primitive_shape::load)
+        .add_system(cmp_primitive_shape::save)
+
         .register_type::<Shredder>()
         .add_system(cmp_shredder::load)
         .add_system(cmp_shredder::save)
@@ -265,6 +239,10 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .register_type::<Trajectory>()
         .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<VerticalVibrator>
+        .register_type::<HorizontalVibrator>
+        .add_system(cmp_vibrator::system.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
 
@@ -382,8 +360,6 @@ fn load_map_polyline() -> Vec<Vec<Vec2>> {
 }
 
 fn add_map(commands: &mut Commands) {
-    //let sprite_handle = game_assets.image_handles.get("map2_handle").unwrap();
-    //let sprite_handle = game_assets.image_handles.get("map5_handle").unwrap();
     let polylines = load_map_polyline();
     let mut colliders = vec![];
     let mut shapes = vec![];
@@ -408,13 +384,12 @@ fn add_map(commands: &mut Commands) {
         entity.with_children(|children| {
 
             children.spawn(collider)
-                .insert(Restitution::coefficient(0.01))
-                .insert(Friction::coefficient(0.001))
+                .insert(Restitution::coefficient(constants::C_MAP_RESTITUTION))
+                .insert(Friction::coefficient(constants::C_MAP_FRICTION))
                 .insert(ShapeBundle {
                     path: GeometryBuilder::build_as(&shape),
                     ..default()
                 })
-                //.insert(Fill::color(Color::DARK_GRAY))
                 .insert(Fill::color(Color::BLACK))
                 .insert(Stroke::new(Color::BLACK, 1.0));
 
@@ -424,12 +399,14 @@ fn add_map(commands: &mut Commands) {
 
 }
 
-const SIMULATION_TIME_SCALE: f32 = 1.0;
 fn setup_physics(mut commands: Commands,
                  mut rapier_configuration: ResMut<RapierConfiguration>) {
 
     println!("{:?}", rapier_configuration.timestep_mode);
-    rapier_configuration.timestep_mode = TimestepMode::Variable { max_dt: 1.0 / 60.0, time_scale: SIMULATION_TIME_SCALE, substeps: 1 };
+    rapier_configuration.timestep_mode = TimestepMode::Variable {
+        max_dt: 1.0 / 60.0,
+        time_scale: constants::C_SIMULATION_TIME_SCALE,
+        substeps: 1 };
 
     /* Create the ground. */
     println!("setup map");
@@ -723,6 +700,18 @@ fn handle_user_input(
                             }
                         }
 
+                        MapObject::PrimitiveShape(shape) => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let primitive_shape = PrimitiveShape {
+                                    shape,
+                                    scale: 1.0,
+                                    position: world_position
+                                };
+                                let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
                         MapObject::Shredder(entities, polyline) => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let mut entities: Vec<Entity> = entities.to_vec();
@@ -865,6 +854,33 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Pad Acceleration spawned");
                 *edit_mode = EditContext::Spawn(MapObject::PadAcceleration(None));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Box");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SBox));
+            }
+
+            ui.label("Circle");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SCircle));
+            }
+
+            ui.label("Dia");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SDia));
+            }
+
+            ui.label("Star");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SStar));
+            }
+
+            ui.label("Triangle");
+            if ui.button("o").clicked() {
+                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::STriangle));
             }
         });
 
