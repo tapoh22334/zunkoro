@@ -1,40 +1,68 @@
+//use bevy::prelude::*;
+use serde::de::DeserializeOwned;
+use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
-use crate::cmp_primitive_shape::PrimitiveShape;
-use crate::cmp_primitive_shape::PrimitiveShapeBundle;
 use crate::cmp_rotator::Rotator;
 use crate::ev_save_load_world::Derrived;
 
 #[derive(Bundle)]
-pub struct RotatingShapeBundle{
+pub struct RotatingShapeAttachmentBundle {
     pub rotator: Rotator,
-    pub velocity: Velocity,
-    pub rigid_body: RigidBody,
     pub derrived: Derrived,
-    #[bundle]
-    pub primitive_shape_bundle: PrimitiveShapeBundle,
 }
 
-impl Default for RotatingShapeBundle {
+impl Default for RotatingShapeAttachmentBundle {
     fn default() -> Self {
         Self {
             rotator: Rotator::default(),
-            velocity: Velocity::default(),
             derrived: Derrived,
-            rigid_body: RigidBody::KinematicVelocityBased,
-            primitive_shape_bundle: PrimitiveShapeBundle::default(),
         }
     }
 }
 
-impl From<(Rotator, PrimitiveShape)> for RotatingShapeBundle {
-    fn from(vp: (Rotator, PrimitiveShape)) -> Self {
-        let (rotator, primitive_shape) = vp;
+
+impl From<Rotator> for RotatingShapeAttachmentBundle
+{
+    fn from(rotator: Rotator) -> Self {
         Self {
             rotator,
-            primitive_shape_bundle: PrimitiveShapeBundle::from(primitive_shape),
-            ..default()
+            ..Default::default()
+        }
+    }
+}
+
+
+#[derive(Bundle)]
+pub struct RotatingShapeBundle<T: Sync + Send + bevy::prelude::Bundle>{
+    #[bundle]
+    pub vsa_bundle: RotatingShapeAttachmentBundle,
+    #[bundle]
+    pub shape_bundle: T,
+}
+
+
+impl<T: bevy::prelude::Bundle + Default> Default for RotatingShapeBundle<T> {
+    fn default() -> Self {
+        Self {
+            vsa_bundle: RotatingShapeAttachmentBundle::default(),
+            shape_bundle: T::default(),
+        }
+    }
+}
+
+
+impl<T1: bevy::prelude::Bundle + Default, T2> From<(Vec3, Quat, Vec3, T2, Rotator)> for RotatingShapeBundle<T1>
+where
+    T1: From<(Vec3, Quat, Vec3, T2)>,
+{
+    fn from(tuple: (Vec3, Quat, Vec3, T2, Rotator)) -> Self {
+        let (t, r, s, shape, rotator) = tuple;
+        Self {
+            vsa_bundle: RotatingShapeAttachmentBundle::from(rotator),
+            shape_bundle: T1::from((t, r, s, shape)),
+            ..Default::default()
         }
     }
 }
@@ -42,39 +70,38 @@ impl From<(Rotator, PrimitiveShape)> for RotatingShapeBundle {
 
 const FILE_NAME: &str = "/rotating_shape.map";
 use crate::ev_save_load_world::LoadWorldEvent;
-pub fn load(
+pub fn load<T1: bevy::prelude::Bundle + Default, T2: DeserializeOwned + Sync + Send + bevy::prelude::Component>(
     mut load_world_er: EventReader<LoadWorldEvent>,
     mut commands: Commands,
-    ) {
+    )
+where
+    T1: From<(Vec3, Quat, Vec3, T2)>,
+{
 
     for e in load_world_er.iter() {
         let dir = e.0.clone();
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<(Rotator, PrimitiveShape)> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(Vec3, Quat, Vec3, T2, Rotator)> = serde_json::from_str(&json_str).unwrap();
 
-            for (v, p) in elem_list {
-                commands.spawn(RotatingShapeBundle::from((v, p)));
+            for (t, r, s, p, v) in elem_list {
+                commands.spawn(RotatingShapeBundle::<T1>::from((t, r, s, p, v)));
             }
         }
     }
 }
 
 use crate::ev_save_load_world::SaveWorldEvent;
-pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &Rotator, &PrimitiveShape)>
+pub fn save<T: bevy::prelude::Component + Clone + Serialize>(mut save_world_er: EventReader<SaveWorldEvent>,
+              q: Query<(&Transform, &Rotator, &T)>
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<(Rotator, PrimitiveShape)> = vec![];
+        let mut elem_list: Vec<(Vec3, Quat, Vec3, T, Rotator)> = vec![];
 
         for (t, vi, ps) in q.iter() {
-            let mut ps = ps.clone();
-            ps.position = t.translation.truncate();
-            ps.scale = t.scale.truncate().x;
-            ps.rotation = t.rotation;
-            elem_list.push((vi.clone(), ps.clone()));
+            elem_list.push((t.translation, t.rotation, t.scale, ps.clone(), vi.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();

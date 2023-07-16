@@ -21,9 +21,6 @@ pub enum Shape {
 #[derive(Default, Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct PrimitiveShape {
     pub shape: Shape,
-    pub position: Vec2,
-    pub rotation: Quat,
-    pub scale: f32,
 }
 
 #[derive(Bundle)]
@@ -35,6 +32,8 @@ pub struct PrimitiveShapeBundle {
     color: Fill,
     stroke: Stroke,
     bbsize: BBSize,
+    velocity: Velocity,
+    rigid_body: RigidBody,
     #[bundle]
     shape_bundle: ShapeBundle,
 }
@@ -60,6 +59,8 @@ impl Default for PrimitiveShapeBundle {
             color: Fill::color(Color::BLACK),
             stroke: Stroke::new(Color::BLACK, 1.0),
             bbsize: BBSize{x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y},
+            velocity: Velocity::default(),
+            rigid_body: RigidBody::KinematicVelocityBased,
             shape_bundle: ShapeBundle{
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
@@ -72,27 +73,26 @@ impl Default for PrimitiveShapeBundle {
     }
 }
 
-impl From<PrimitiveShape> for PrimitiveShapeBundle {
-    fn from(primitive_shape: PrimitiveShape) -> Self {
+impl From<(Vec3, Quat, Vec3, PrimitiveShape)> for PrimitiveShapeBundle {
+    fn from(tuple: (Vec3, Quat, Vec3, PrimitiveShape)) -> Self {
+        let (translation, rotation, scale, primitive_shape) = tuple;
+
         println!("from primitive shape");
-        let shape = primitive_shape.shape.clone();
-        let position = primitive_shape.position.clone();
-        let scale = primitive_shape.scale.clone();
-        let polyline = load_shape_polyline(shape);
+        let polyline = load_shape_polyline(primitive_shape.shape);
         let polygon = shapes::Polygon {points: polyline.clone(), closed: false};
 
         Self {
             primitive_shape,
             collider: Collider::polyline(polyline, None),
             bbsize: BBSize {
-                x: DEFAULT_SIZE_X * scale, y: DEFAULT_SIZE_Y * scale
+                x: DEFAULT_SIZE_X * scale.x, y: DEFAULT_SIZE_Y * scale.y
             },
             shape_bundle: ShapeBundle {
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
-                    translation: Vec3::from((position, 0.0)),
-                    scale: Vec3::ONE * scale,
-                    ..default()
+                    translation,
+                    rotation,
+                    scale,
                 },
                 ..default()
             },
@@ -140,10 +140,10 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<PrimitiveShape> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape)> = serde_json::from_str(&json_str).unwrap();
 
-            for e in elem_list {
-                commands.spawn(PrimitiveShapeBundle::from(e));
+            for (t, r, s, e) in elem_list {
+                commands.spawn(PrimitiveShapeBundle::from((t, r, s, e)));
             }
         }
     }
@@ -155,14 +155,11 @@ pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<PrimitiveShape> = vec![];
+        let mut elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape)> = vec![];
 
         for (t, e) in q.iter() {
             let mut e = e.clone();
-            e.position = t.translation.truncate();
-            e.scale = t.scale.truncate().x;
-            e.rotation = t.rotation;
-            elem_list.push(e.clone());
+            elem_list.push((t.translation, t.rotation, t.scale, e.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();

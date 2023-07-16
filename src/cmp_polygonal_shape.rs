@@ -36,6 +36,8 @@ pub struct PolygonalShapeBundle {
     color: Fill,
     stroke: Stroke,
     bbsize: BBSize,
+    velocity: Velocity,
+    rigid_body: RigidBody,
     #[bundle]
     shape_bundle: ShapeBundle,
 }
@@ -57,6 +59,8 @@ impl Default for PolygonalShapeBundle {
             color: Fill::color(Color::BLACK),
             stroke: Stroke::new(Color::BLACK, 1.0),
             bbsize: BBSize{x: 0.0, y: 0.0},
+            velocity: Velocity::default(),
+            rigid_body: RigidBody::KinematicVelocityBased,
             shape_bundle: ShapeBundle{
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
@@ -99,29 +103,28 @@ fn bounding_box(polyline: &Vec<Vec2>) -> Vec2 {
 }
 
 
-impl From<PolygonalShape> for PolygonalShapeBundle {
-    fn from(polygonal_shape: PolygonalShape) -> Self {
-        let position = polygonal_shape.position.clone();
-        let rotation = polygonal_shape.rotation.clone();
-        let scale = polygonal_shape.scale.clone();
-        let polyline = polygonal_shape.polygon.clone();
+impl From<(Vec3, Quat, Vec3, PolygonalShape)> for PolygonalShapeBundle {
+    fn from(tuple: (Vec3, Quat, Vec3, PolygonalShape)) -> Self {
+        let (t, r, s, ps) = tuple;
+
+        let polyline = ps.polygon.clone();
         let bbsize = bounding_box(&polyline);
 
         let polygon = shapes::Polygon {points: polyline.clone(), closed: false};
         let collider = Collider::polyline(polyline.clone(), None);
 
         Self {
-            polygonal_shape,
+            polygonal_shape: ps,
             collider,
             bbsize: BBSize {
-                x: bbsize.x * scale, y: bbsize.y * scale
+                x: bbsize.x * s.x, y: bbsize.y * s.y
             },
             shape_bundle: ShapeBundle {
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
-                    translation: Vec3::from((position, 0.0)),
-                    scale: Vec3::ONE * scale,
-                    ..default()
+                    translation: t,
+                    rotation: r,
+                    scale: s,
                 },
                 ..default()
             },
@@ -143,10 +146,10 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<PolygonalShape> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(Vec3, Quat, Vec3, PolygonalShape)> = serde_json::from_str(&json_str).unwrap();
 
-            for e in elem_list {
-                commands.spawn(PolygonalShapeBundle::from(e));
+            for (t, r, s, ps) in elem_list {
+                commands.spawn(PolygonalShapeBundle::from((t, r, s, ps)));
             }
         }
     }
@@ -158,14 +161,10 @@ pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<PolygonalShape> = vec![];
+        let mut elem_list: Vec<(Vec3, Quat, Vec3, PolygonalShape)> = vec![];
 
         for (t, e) in q.iter() {
-            let mut e = e.clone();
-            e.position = t.translation.truncate();
-            e.scale = t.scale.truncate().x;
-            e.rotation = t.rotation;
-            elem_list.push(e.clone());
+            elem_list.push((t.translation, t.rotation, t.scale, e.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();

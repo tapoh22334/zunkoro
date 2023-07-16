@@ -1,83 +1,120 @@
+use std::any::type_name;
+
+use serde::de::DeserializeOwned;
+use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
-use crate::cmp_primitive_shape::PrimitiveShape;
-use crate::cmp_primitive_shape::PrimitiveShapeBundle;
 use crate::cmp_vibrator::Vibrator;
 use crate::ev_save_load_world::Derrived;
 
 #[derive(Bundle)]
-pub struct VibratingShapeBundle{
+pub struct VibratingShapeAttachmentBundle {
     pub vibrator: Vibrator,
-    pub velocity: Velocity,
-    pub rigid_body: RigidBody,
     pub derrived: Derrived,
-    #[bundle]
-    pub primitive_shape_bundle: PrimitiveShapeBundle,
 }
 
-impl Default for VibratingShapeBundle {
+impl Default for VibratingShapeAttachmentBundle {
     fn default() -> Self {
         Self {
             vibrator: Vibrator::default(),
-            velocity: Velocity::default(),
             derrived: Derrived,
-            rigid_body: RigidBody::KinematicVelocityBased,
-            primitive_shape_bundle: PrimitiveShapeBundle::default(),
         }
     }
 }
 
-impl From<(Vibrator, PrimitiveShape)> for VibratingShapeBundle {
-    fn from(vp: (Vibrator, PrimitiveShape)) -> Self {
-        let (vibrator, primitive_shape) = vp;
+
+impl From<Vibrator> for VibratingShapeAttachmentBundle
+{
+    fn from(vibrator: Vibrator) -> Self {
         Self {
             vibrator,
-            primitive_shape_bundle: PrimitiveShapeBundle::from(primitive_shape),
-            ..default()
+            ..Default::default()
         }
     }
 }
 
 
-const FILE_NAME: &str = "/vibrating_shape.map";
+#[derive(Bundle)]
+pub struct VibratingShapeBundle<T: Sync + Send + bevy::prelude::Bundle>{
+    #[bundle]
+    pub vsa_bundle: VibratingShapeAttachmentBundle,
+    #[bundle]
+    pub shape_bundle: T,
+}
+
+
+impl<T: bevy::prelude::Bundle + Default> Default for VibratingShapeBundle<T> {
+    fn default() -> Self {
+        Self {
+            vsa_bundle: VibratingShapeAttachmentBundle::default(),
+            shape_bundle: T::default(),
+        }
+    }
+}
+
+
+impl<T1: bevy::prelude::Bundle + Default, T2> From<(Vec3, Quat, Vec3, T2, Vibrator)> for VibratingShapeBundle<T1>
+where
+    T1: From<(Vec3, Quat, Vec3, T2)>,
+{
+    fn from(tuple: (Vec3, Quat, Vec3, T2, Vibrator)) -> Self {
+        let (t, r, s, shape, vibrator) = tuple;
+        Self {
+            vsa_bundle: VibratingShapeAttachmentBundle::from(vibrator),
+            shape_bundle: T1::from((t, r, s, shape)),
+            ..Default::default()
+        }
+    }
+}
+
+fn simplify_type_name<T>() -> &'static str {
+    let raw_type_name = type_name::<T>();
+    let mut split_type_name = raw_type_name.split("::");
+    split_type_name.last().unwrap_or(&raw_type_name)
+}
+
+const FILE_NAME: &str = "/vibrating_shape";
+const FILE_EXT: &str = ".map";
 use crate::ev_save_load_world::LoadWorldEvent;
-pub fn load(
+pub fn load<T1: bevy::prelude::Bundle + Default, T2: DeserializeOwned + Sync + Send + bevy::prelude::Component>(
     mut load_world_er: EventReader<LoadWorldEvent>,
     mut commands: Commands,
-    ) {
+    )
+where
+    T1: From<(Vec3, Quat, Vec3, T2)>,
+{
 
     for e in load_world_er.iter() {
         let dir = e.0.clone();
 
-        let json_str = std::fs::read_to_string(dir + FILE_NAME);
+        let filename = dir + FILE_NAME + simplify_type_name::<T2>() + FILE_EXT;
+        let json_str = std::fs::read_to_string(filename);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<(Vibrator, PrimitiveShape)> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(Vec3, Quat, Vec3, T2, Vibrator)> = serde_json::from_str(&json_str).unwrap();
 
-            for (v, p) in elem_list {
-                commands.spawn(VibratingShapeBundle::from((v, p)));
+            for (t, r, s, p, v) in elem_list {
+                commands.spawn(VibratingShapeBundle::<T1>::from((t, r, s, p, v)));
             }
         }
     }
 }
 
 use crate::ev_save_load_world::SaveWorldEvent;
-pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &Vibrator, &PrimitiveShape)>
+pub fn save<T: bevy::prelude::Component + Clone + Serialize>(mut save_world_er: EventReader<SaveWorldEvent>,
+              q: Query<(&Transform, &Vibrator, &T)>
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<(Vibrator, PrimitiveShape)> = vec![];
+        let mut elem_list: Vec<(Vec3, Quat, Vec3, T, Vibrator)> = vec![];
 
         for (t, vi, ps) in q.iter() {
-            let mut ps = ps.clone();
-            ps.position = t.translation.truncate();
-            ps.scale = t.scale.truncate().x;
-            ps.rotation = t.rotation;
-            elem_list.push((vi.clone(), ps.clone()));
+            elem_list.push((t.translation, t.rotation, t.scale, ps.clone(), vi.clone()));
         }
 
-        std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();
+        let filename = dir + FILE_NAME + simplify_type_name::<T>() + FILE_EXT;
+        println!("{:?}", filename);
+        std::fs::write(filename, serde_json::to_string(&elem_list).unwrap()).unwrap();
     }
 }
 
