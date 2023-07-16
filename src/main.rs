@@ -261,15 +261,15 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_shredder::system_move.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_shredder::system_kill.in_set(OnUpdate(AppState::Game)))
 
-        .add_system(bdl_vibrating_shape::load::<PrimitiveShapeBundle, PrimitiveShape>)
-        .add_system(bdl_vibrating_shape::save::<PrimitiveShape>)
-        .add_system(bdl_vibrating_shape::load::<PolygonalShapeBundle, PolygonalShape>)
-        .add_system(bdl_vibrating_shape::save::<PolygonalShape>)
+        //.add_system(bdl_vibrating_shape::load::<PrimitiveShapeBundle, PrimitiveShape>)
+        //.add_system(bdl_vibrating_shape::save::<PrimitiveShape>)
+        //.add_system(bdl_vibrating_shape::load::<PolygonalShapeBundle, PolygonalShape>)
+        //.add_system(bdl_vibrating_shape::save::<PolygonalShape>)
 
-        .add_system(bdl_rotating_shape::load::<PrimitiveShapeBundle, PrimitiveShape>)
-        .add_system(bdl_rotating_shape::save::<PrimitiveShape>)
-        .add_system(bdl_rotating_shape::load::<PolygonalShapeBundle, PolygonalShape>)
-        .add_system(bdl_rotating_shape::save::<PolygonalShape>)
+        //.add_system(bdl_rotating_shape::load::<PrimitiveShapeBundle, PrimitiveShape>)
+        //.add_system(bdl_rotating_shape::save::<PrimitiveShape>)
+        //.add_system(bdl_rotating_shape::load::<PolygonalShapeBundle, PolygonalShape>)
+        //.add_system(bdl_rotating_shape::save::<PolygonalShape>)
 
         .register_type::<Trajectory>()
         .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))

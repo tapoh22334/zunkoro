@@ -7,6 +7,11 @@ use bevy_prototype_lyon::prelude::*;
 use crate::BBSize;
 use crate::constants;
 use crate::ev_save_load_world::Derrived;
+use crate::cmp_vibrator::Vibrator;
+use crate::cmp_rotator::Rotator;
+use crate::bdl_vibrating_shape::VibratingShapeAttachmentBundle;
+use crate::bdl_rotating_shape::RotatingShapeAttachmentBundle;
+
 
 #[derive(Default, Component, Reflect, FromReflect, Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 pub enum Shape {
@@ -140,10 +145,18 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape)> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape, Option<Vibrator>, Option<Rotator>)>
+                = serde_json::from_str(&json_str).unwrap();
 
-            for (t, r, s, e) in elem_list {
-                commands.spawn(PrimitiveShapeBundle::from((t, r, s, e)));
+            for (t, r, s, e, v_opt, r_opt) in elem_list {
+                println!("{:?}", v_opt);
+                let mut entity = commands.spawn(PrimitiveShapeBundle::from((t, r, s, e)));
+                if v_opt.is_some() {
+                    entity.insert(VibratingShapeAttachmentBundle::from(v_opt.unwrap()));
+                }
+                if r_opt.is_some() {
+                    entity.insert(RotatingShapeAttachmentBundle::from(r_opt.unwrap()));
+                }
             }
         }
     }
@@ -151,15 +164,15 @@ pub fn load(
 
 use crate::ev_save_load_world::SaveWorldEvent;
 pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &PrimitiveShape), Without<Derrived>>
+              q: Query<(&Transform, &PrimitiveShape, Option<&Vibrator>, Option<&Rotator>), Without<Derrived>>
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape)> = vec![];
+        let mut elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape, Option<Vibrator>, Option<Rotator>)> = vec![];
 
-        for (t, e) in q.iter() {
+        for (t, e, v_opt, r_opt) in q.iter() {
             let mut e = e.clone();
-            elem_list.push((t.translation, t.rotation, t.scale, e.clone()));
+            elem_list.push((t.translation, t.rotation, t.scale, e.clone(), v_opt.cloned(), r_opt.cloned()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();
