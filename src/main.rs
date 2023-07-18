@@ -15,14 +15,6 @@ use bevy_prototype_lyon::prelude::*;
 
 mod constants;
 
-mod bdl_rotating_shape;
-use bdl_rotating_shape::RotatingShapeBundle;
-use bdl_rotating_shape::RotatingShapeAttachmentBundle;
-
-mod bdl_vibrating_shape;
-use bdl_vibrating_shape::VibratingShapeAttachmentBundle;
-use bdl_vibrating_shape::VibratingShapeBundle;
-
 mod cmp_artillery;
 use crate::cmp_artillery::Artillery;
 
@@ -130,6 +122,8 @@ enum MapObject {
     Shredder(Vec<Entity>, Vec<Vec2>),
     VibratingShape(Entity),
     RotatingShape(Entity),
+    RevoluteJoint(Entity),
+    Zundamon,
 }
 
 #[derive(Resource, Reflect, Clone, PartialEq, Debug, InspectorOptions)]
@@ -254,6 +248,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .register_type::<Rotator>()
         .add_system(cmp_rotator::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_rotator::load)
+        .add_system(cmp_rotator::save)
 
         .register_type::<Shredder>()
         .add_system(cmp_shredder::load)
@@ -261,21 +257,13 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_shredder::system_move.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_shredder::system_kill.in_set(OnUpdate(AppState::Game)))
 
-        //.add_system(bdl_vibrating_shape::load::<PrimitiveShapeBundle, PrimitiveShape>)
-        //.add_system(bdl_vibrating_shape::save::<PrimitiveShape>)
-        //.add_system(bdl_vibrating_shape::load::<PolygonalShapeBundle, PolygonalShape>)
-        //.add_system(bdl_vibrating_shape::save::<PolygonalShape>)
-
-        //.add_system(bdl_rotating_shape::load::<PrimitiveShapeBundle, PrimitiveShape>)
-        //.add_system(bdl_rotating_shape::save::<PrimitiveShape>)
-        //.add_system(bdl_rotating_shape::load::<PolygonalShapeBundle, PolygonalShape>)
-        //.add_system(bdl_rotating_shape::save::<PolygonalShape>)
-
         .register_type::<Trajectory>()
         .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<Vibrator>()
         .add_system(cmp_vibrator::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_vibrator::load)
+        .add_system(cmp_vibrator::save)
 
         .add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
 
@@ -468,7 +456,7 @@ fn handle_user_input(
     mut edit_context: ResMut<EditContext>,
     windows_q: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    mut transform_q: Query<(Entity, &mut Transform, &mut BBSize)>,
+    mut transform_q: Query<(Entity, &mut Transform, &mut RigidBody, &mut BBSize)>,
     ) {
 
     // Games typically only have one window (the primary window)
@@ -487,7 +475,7 @@ fn handle_user_input(
         match edit_context.clone() {
             EditContext::Edit(pick, edit_tool) => {
                 if buttons.just_pressed(MouseButton::Left) {
-                    for (entity, transform, size) in transform_q.iter() {
+                    for (entity, transform, _, size) in transform_q.iter() {
                         let sized_width = size.x * transform.scale.x;
                         let sized_height = size.y * transform.scale.y;
 
@@ -530,7 +518,7 @@ fn handle_user_input(
                 match edit_tool {
                     EditTool::Translate => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _, _)) = transform_q.get_mut(entity) {
                                 transform.translation.x = world_position.x;
                                 transform.translation.y = world_position.y;
                             }
@@ -539,7 +527,7 @@ fn handle_user_input(
 
                     EditTool::Rotate => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _, _)) = transform_q.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let dir = (world_position - pos).normalize();
                                 let angle = Vec2::new(0.0, 1.0).angle_between(dir);
@@ -550,7 +538,7 @@ fn handle_user_input(
 
                     EditTool::Scale => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _, bbsize)) = transform_q.get_mut(entity) {
                                 let pos = Vec2::new(transform.translation.x, transform.translation.y);
                                 let r = pos.distance(world_position);
                                 let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
@@ -563,7 +551,7 @@ fn handle_user_input(
 
                     EditTool::ScaleDistort => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _, bbsize)) = transform_q.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let diff = world_position - pos;
                                 let scale = diff / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
@@ -751,7 +739,7 @@ fn handle_user_input(
                                                                   &game_assets,
                                                                   pd);
                                     *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
-                                }
+                               }
                             }
                         }
 
@@ -763,7 +751,7 @@ fn handle_user_input(
                                 let primitive_shape = PrimitiveShape {
                                     shape,
                                 };
-                                //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
+                                //let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
                                 let entity = commands.spawn(PrimitiveShapeBundle::from((t, r, s, primitive_shape))).id();
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
@@ -813,9 +801,16 @@ fn handle_user_input(
 
                         }
 
+                        MapObject::Zundamon => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
                         MapObject::VibratingShape(entity) => {
                             if buttons.just_pressed(MouseButton::Left) {
-                                let (entity, transform, bbsize) = transform_q.get(entity).unwrap();
+                                let (entity, transform, _, bbsize) = transform_q.get(entity).unwrap();
 
                                 let t = transform.translation.x;
                                 let distance = cmp_primitive_shape::DEFAULT_SIZE_X;
@@ -828,7 +823,7 @@ fn handle_user_input(
                                 };
                                 //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
                                 let entity = commands.entity(entity)
-                                    .insert(VibratingShapeAttachmentBundle::from(vibrator)).id();
+                                    .insert(vibrator).id();
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -840,7 +835,25 @@ fn handle_user_input(
                                     angvel: 1.5,
                                 };
                                 let entity = commands.entity(entity)
-                                    .insert(RotatingShapeAttachmentBundle::from(rotator)).id();
+                                    .insert(rotator).id();
+                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            }
+                        }
+
+
+                        MapObject::RevoluteJoint(entity) => {
+                            if buttons.just_pressed(MouseButton::Left) {
+                                let (entity, transform, mut rigid_body, bbsize) = transform_q.get_mut(entity).unwrap();
+
+                                let joint = RevoluteJointBuilder::new()
+                                    .local_anchor1(Vec2::new(0.0, 0.0))
+                                    .local_anchor2(transform.translation.truncate());
+
+                                commands.spawn(RigidBody::Dynamic)
+                                    .insert(ImpulseJoint::new(entity, joint));
+
+                                *rigid_body = RigidBody::Dynamic;
+
                                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
                         }
@@ -982,6 +995,13 @@ fn spawn_map_object (
             }
         });
 
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Zundamon");
+            if ui.button("o").clicked() {
+                 *edit_mode = EditContext::Spawn(MapObject::Zundamon);
+            }
+        });
+
         ui.separator();
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Vibrator");
@@ -1004,6 +1024,21 @@ fn spawn_map_object (
                 if let EditContext::Edit(entity_opt, edit_tool) = *edit_mode {
                     if entity_opt.is_some() {
                         *edit_mode = EditContext::Spawn(MapObject::RotatingShape(entity_opt.unwrap()));
+                    } else {
+                        info!("no entity selected");
+                    }
+                } else {
+                    info!("target not selected");
+                }
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("RevoluteJoint");
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(entity_opt, edit_tool) = *edit_mode {
+                    if entity_opt.is_some() {
+                        *edit_mode = EditContext::Spawn(MapObject::RevoluteJoint(entity_opt.unwrap()));
                     } else {
                         info!("no entity selected");
                     }

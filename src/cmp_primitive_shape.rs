@@ -7,10 +7,6 @@ use bevy_prototype_lyon::prelude::*;
 use crate::BBSize;
 use crate::constants;
 use crate::ev_save_load_world::Derrived;
-use crate::cmp_vibrator::Vibrator;
-use crate::cmp_rotator::Rotator;
-use crate::bdl_vibrating_shape::VibratingShapeAttachmentBundle;
-use crate::bdl_rotating_shape::RotatingShapeAttachmentBundle;
 
 
 #[derive(Default, Component, Reflect, FromReflect, Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
@@ -39,6 +35,7 @@ pub struct PrimitiveShapeBundle {
     bbsize: BBSize,
     velocity: Velocity,
     rigid_body: RigidBody,
+    mass_property: ColliderMassProperties,
     #[bundle]
     shape_bundle: ShapeBundle,
 }
@@ -66,6 +63,8 @@ impl Default for PrimitiveShapeBundle {
             bbsize: BBSize{x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y},
             velocity: Velocity::default(),
             rigid_body: RigidBody::KinematicVelocityBased,
+            //rigid_body: RigidBody::Dynamic,
+            mass_property: ColliderMassProperties::Mass(1.0), 
             shape_bundle: ShapeBundle{
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
@@ -145,18 +144,12 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape, Option<Vibrator>, Option<Rotator>)>
+            let elem_list: Vec<(u32, Vec3, Quat, Vec3, PrimitiveShape)>
                 = serde_json::from_str(&json_str).unwrap();
 
-            for (t, r, s, e, v_opt, r_opt) in elem_list {
-                println!("{:?}", v_opt);
-                let mut entity = commands.spawn(PrimitiveShapeBundle::from((t, r, s, e)));
-                if v_opt.is_some() {
-                    entity.insert(VibratingShapeAttachmentBundle::from(v_opt.unwrap()));
-                }
-                if r_opt.is_some() {
-                    entity.insert(RotatingShapeAttachmentBundle::from(r_opt.unwrap()));
-                }
+            for (i, t, r, s, ps) in elem_list {
+                let mut entity = commands.get_or_spawn(Entity::from_raw(i));
+                entity.insert(PrimitiveShapeBundle::from((t, r, s, ps)));
             }
         }
     }
@@ -164,18 +157,17 @@ pub fn load(
 
 use crate::ev_save_load_world::SaveWorldEvent;
 pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &PrimitiveShape, Option<&Vibrator>, Option<&Rotator>), Without<Derrived>>
+              q: Query<(Entity, &Transform, &PrimitiveShape), Without<Derrived>>
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<(Vec3, Quat, Vec3, PrimitiveShape, Option<Vibrator>, Option<Rotator>)> = vec![];
+        let mut elem_list: Vec<(u32, Vec3, Quat, Vec3, PrimitiveShape)> = vec![];
 
-        for (t, e, v_opt, r_opt) in q.iter() {
+        for (e, t, ps) in q.iter() {
             let mut e = e.clone();
-            elem_list.push((t.translation, t.rotation, t.scale, e.clone(), v_opt.cloned(), r_opt.cloned()));
+            elem_list.push((e.index(), t.translation, t.rotation, t.scale, ps.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();
     }
 }
-

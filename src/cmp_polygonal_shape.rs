@@ -146,10 +146,12 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<(Vec3, Quat, Vec3, PolygonalShape)> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(u32, Vec3, Quat, Vec3, PolygonalShape)>
+                = serde_json::from_str(&json_str).unwrap();
 
-            for (t, r, s, ps) in elem_list {
-                commands.spawn(PolygonalShapeBundle::from((t, r, s, ps)));
+            for (i, t, r, s, ps) in elem_list {
+                let mut entity = commands.get_or_spawn(Entity::from_raw(i));
+                entity.insert(PolygonalShapeBundle::from((t, r, s, ps)));
             }
         }
     }
@@ -157,17 +159,17 @@ pub fn load(
 
 use crate::ev_save_load_world::SaveWorldEvent;
 pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &PolygonalShape), Without<Derrived>>
+              q: Query<(Entity, &Transform, &PolygonalShape), Without<Derrived>>
               ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<(Vec3, Quat, Vec3, PolygonalShape)> = vec![];
+        let mut elem_list: Vec<(u32, Vec3, Quat, Vec3, PolygonalShape)> = vec![];
 
-        for (t, e) in q.iter() {
-            elem_list.push((t.translation, t.rotation, t.scale, e.clone()));
+        for (e, t, ps) in q.iter() {
+            let mut e = e.clone();
+            elem_list.push((e.index(), t.translation, t.rotation, t.scale, ps.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();
     }
 }
-

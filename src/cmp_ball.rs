@@ -16,7 +16,7 @@ pub struct Ball {
 #[derive(Component)]
 pub struct Zundamon;
 
-pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: f32, vel: Vec2) {
+pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: f32, vel: Vec2) -> Entity {
     let mut rng = rand::thread_rng();
     let image_vec = vec![ "zun1_handle", "zun2_handle", "zun3_handle" ];
     let random_index = rng.gen_range(0..image_vec.len());
@@ -25,8 +25,8 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
     let sprite_handle = game_assets.image_handles.get(random_image).unwrap();
     let collider = Collider::ball(r);
 
-    commands
-        .spawn(Ball {radius: r, previous_position: None})
+    let mut entity = commands.spawn(Ball {radius: r, previous_position: None});
+    entity
         .insert(Zundamon)
         .insert(RigidBody::Dynamic)
         .insert(Restitution::coefficient(0.1))
@@ -54,6 +54,8 @@ pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: 
             angvel: 0.0,
         })
     ;
+
+    entity.id()
 }
 
 pub fn kill(commands: &mut Commands,
