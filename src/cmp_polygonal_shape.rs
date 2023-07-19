@@ -38,6 +38,7 @@ pub struct PolygonalShapeBundle {
     bbsize: BBSize,
     velocity: Velocity,
     rigid_body: RigidBody,
+    mass_property: ColliderMassProperties,
     #[bundle]
     shape_bundle: ShapeBundle,
 }
@@ -61,6 +62,11 @@ impl Default for PolygonalShapeBundle {
             bbsize: BBSize{x: 0.0, y: 0.0},
             velocity: Velocity::default(),
             rigid_body: RigidBody::KinematicVelocityBased,
+            mass_property: ColliderMassProperties::MassProperties(MassProperties {
+                local_center_of_mass: Vec2::new(0.0, 0.0),
+                mass: constants::C_DEFAULT_MASS,
+                principal_inertia: constants::C_DEFAULT_INERTIA,
+            }),
             shape_bundle: ShapeBundle{
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {

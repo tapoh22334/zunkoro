@@ -368,7 +368,7 @@ fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
 
 
 fn load_map_polyline() -> Vec<Vec<Vec2>> {
-    let map_file = include_bytes!("../assets/map_mini2.map");
+    let map_file = include_bytes!("../assets/map_mini3.map");
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
 
@@ -847,10 +847,20 @@ fn handle_user_input(
 
                                 let joint = RevoluteJointBuilder::new()
                                     .local_anchor1(Vec2::new(0.0, 0.0))
-                                    .local_anchor2(transform.translation.truncate());
+                                    .local_anchor2(Vec2::new(0.0, 0.0));
 
-                                commands.spawn(RigidBody::Dynamic)
-                                    .insert(ImpulseJoint::new(entity, joint));
+                                let base_entity = commands.spawn(RigidBody::Dynamic)
+                                                    .insert(TransformBundle {
+                                                        local: Transform {
+                                                            translation: transform.translation,
+                                                            ..Default::default()
+                                                        },
+                                                        ..default()
+                                                    })
+                                                    .id();
+
+                                commands.entity(entity)
+                                    .insert(ImpulseJoint::new(base_entity, joint));
 
                                 *rigid_body = RigidBody::Dynamic;
 

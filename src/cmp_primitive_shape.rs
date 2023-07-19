@@ -6,6 +6,7 @@ use bevy_prototype_lyon::prelude::*;
 
 use crate::BBSize;
 use crate::constants;
+use crate::constants::C_DEFAULT_MASS;
 use crate::ev_save_load_world::Derrived;
 
 
@@ -64,7 +65,12 @@ impl Default for PrimitiveShapeBundle {
             velocity: Velocity::default(),
             rigid_body: RigidBody::KinematicVelocityBased,
             //rigid_body: RigidBody::Dynamic,
-            mass_property: ColliderMassProperties::Mass(1.0), 
+            //mass_property: ColliderMassProperties::Mass(1.0), 
+            mass_property: ColliderMassProperties::MassProperties(MassProperties {
+                local_center_of_mass: Vec2::new(0.0, 0.0),
+                mass: constants::C_DEFAULT_MASS,
+                principal_inertia: constants::C_DEFAULT_INERTIA,
+            }),
             shape_bundle: ShapeBundle{
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
