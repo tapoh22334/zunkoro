@@ -91,7 +91,7 @@ use crate::cmp_main_camera::MainCamera;
 
 mod ev_save_load_world;
 use crate::ev_save_load_world::SaveWorldEvent;
-use crate::ev_save_load_world::LoadWorldEvent;
+use crate::ev_save_load_world::{LoadWorldEvent, LoadWorldEventStage2};
 
 mod edit_context;
 use crate::edit_context::*;
@@ -101,6 +101,13 @@ pub struct Map;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum SystemLabel {
+    Load1,
+    Load2,
+}
+
 
 fn main() {
 //use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -142,6 +149,10 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .add_event::<SaveWorldEvent>()
         .add_event::<LoadWorldEvent>()
+        .add_event::<LoadWorldEventStage2>()
+        .add_system(ev_save_load_world::forward_event
+                    //Please ensure that the transmitter of LoadWorldEvent, which is game_move_select, is executed before forward_event to process LoadWorldEventStage2 in the next stage.
+                    .before(game_mode_select));
 
         //.add_system(bdl_rotating_shape::load)
         //.add_system(bdl_rotating_shape::save)

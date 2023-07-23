@@ -58,9 +58,9 @@ fn add(commands: &mut Commands, rigid_body: &mut RigidBody, revolute_joint: Revo
 
 
 const FILE_NAME: &str = "/revolute_joint.map";
-use crate::ev_save_load_world::LoadWorldEvent;
+use crate::ev_save_load_world::LoadWorldEventStage2;
 pub fn load(
-    mut load_world_er: EventReader<LoadWorldEvent>,
+    mut load_world_er: EventReader<LoadWorldEventStage2>,
     mut commands: Commands,
     mut q: Query<&mut RigidBody>,
     )
