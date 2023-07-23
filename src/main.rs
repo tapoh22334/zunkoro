@@ -66,7 +66,8 @@ use crate::cmp_primitive_shape::PrimitiveShape;
 use crate::cmp_primitive_shape::PrimitiveShapeBundle;
 
 mod cmp_revolute_joint;
-use crate::cmp_revolute_joint::RevoluteJoint;
+use crate::cmp_revolute_joint::{RevoluteJoint, delay_load};
+use crate::cmp_revolute_joint::DelayLoadRevoluteJoint;
 
 mod cmp_rotator;
 use crate::cmp_rotator::Rotator;
@@ -151,8 +152,9 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_event::<LoadWorldEvent>()
         .add_event::<LoadWorldEventStage2>()
         .add_system(ev_save_load_world::forward_event
-                    //Please ensure that the transmitter of LoadWorldEvent, which is game_move_select, is executed before forward_event to process LoadWorldEventStage2 in the next stage.
-                    .before(game_mode_select));
+                    //Please ensure that the transmitter of LoadWorldEvent, which is game_move_select,
+                    //is executed before forward_event to process LoadWorldEventStage2 in the next stage.
+                    .after(game_mode_select))
 
         //.add_system(bdl_rotating_shape::load)
         //.add_system(bdl_rotating_shape::save)
@@ -218,11 +220,11 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_primitive_shape::save)
 
         .register_type::<RevoluteJoint>()
+        .add_event::<DelayLoadRevoluteJoint>()
         .add_system(cmp_revolute_joint::handle_user_input)
-        .add_system(cmp_revolute_joint::load
-                        .after(cmp_primitive_shape::load)
-                        .after(cmp_polygonal_shape::load)
-                        )
+        .add_system(cmp_revolute_joint::load.before(
+                        cmp_revolute_joint::delay_load))
+        .add_system(cmp_revolute_joint::delay_load)
         .add_system(cmp_revolute_joint::save)
 
         .register_type::<Rotator>()

@@ -57,15 +57,26 @@ fn add(commands: &mut Commands, rigid_body: &mut RigidBody, revolute_joint: Revo
 }
 
 
+use crate::ev_save_load_world::LoadWorldEvent;
 const FILE_NAME: &str = "/revolute_joint.map";
-use crate::ev_save_load_world::LoadWorldEventStage2;
+pub struct DelayLoadRevoluteJoint(pub String);
+pub fn delay_load(
+    mut load_world_er: EventReader<LoadWorldEvent>,
+    mut load_world_ew: EventWriter<DelayLoadRevoluteJoint>,
+    )
+{
+    for e in load_world_er.iter() {
+        let dir = e.0.clone();
+        load_world_ew.send(DelayLoadRevoluteJoint(dir));
+    }
+}
+
 pub fn load(
-    mut load_world_er: EventReader<LoadWorldEventStage2>,
+    mut load_world_er: EventReader<DelayLoadRevoluteJoint>,
     mut commands: Commands,
     mut q: Query<&mut RigidBody>,
     )
 {
-
     for e in load_world_er.iter() {
         let dir = e.0.clone();
 
