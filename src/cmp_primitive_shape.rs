@@ -6,7 +6,6 @@ use bevy_prototype_lyon::prelude::*;
 
 use crate::BBSize;
 use crate::constants;
-use crate::constants::C_DEFAULT_MASS;
 use crate::ev_save_load_world::Derrived;
 
 
@@ -154,6 +153,7 @@ pub fn load(
                 = serde_json::from_str(&json_str).unwrap();
 
             for (i, t, r, s, ps) in elem_list {
+                println!("load {:?}", i);
                 let mut entity = commands.get_or_spawn(Entity::from_raw(i));
                 entity.insert(PrimitiveShapeBundle::from((t, r, s, ps)));
             }

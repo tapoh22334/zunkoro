@@ -9,7 +9,6 @@ use bevy::sprite::collide_aabb::collide;
 use bevy_rapier2d::prelude::*;
 
 use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPlugin};
-use bevy_inspector_egui::prelude::*;
 
 use bevy_prototype_lyon::prelude::*;
 
@@ -66,6 +65,9 @@ mod cmp_primitive_shape;
 use crate::cmp_primitive_shape::PrimitiveShape;
 use crate::cmp_primitive_shape::PrimitiveShapeBundle;
 
+mod cmp_revolute_joint;
+use crate::cmp_revolute_joint::RevoluteJoint;
+
 mod cmp_rotator;
 use crate::cmp_rotator::Rotator;
 
@@ -91,53 +93,11 @@ mod ev_save_load_world;
 use crate::ev_save_load_world::SaveWorldEvent;
 use crate::ev_save_load_world::LoadWorldEvent;
 
+mod edit_context;
+use crate::edit_context::*;
+
 #[derive(Component)]
 pub struct Map;
-
-#[derive(Resource, Reflect, FromReflect, Clone, Copy, PartialEq, Debug, Default, InspectorOptions)]
-#[reflect(Resource, InspectorOptions)]
-enum EditTool { #[default] Select,
-                Translate,
-                Rotate,
-                Scale,
-                ScaleDistort,
-                }
-
-#[derive(Component, Resource, Reflect, FromReflect, Clone, PartialEq, Debug, Default, InspectorOptions)]
-#[reflect(Resource, InspectorOptions)]
-enum MapObject {
-    #[default]None,
-    Artillery,
-    BlockZombie,
-    ConverterBody,
-    GearSimple,
-    GearSorting,
-    GearSwirl,
-    GateTeleport(Option<(u32, Color)>),
-    GateZombie,
-    GateZundamon,
-    PadVelocity(Option<Vec2>),
-    PadAcceleration(Option<Vec2>),
-    PrimitiveShape(cmp_primitive_shape::Shape),
-    Shredder(Vec<Entity>, Vec<Vec2>),
-    VibratingShape(Entity),
-    RotatingShape(Entity),
-    RevoluteJoint(Entity),
-    Zundamon,
-}
-
-#[derive(Resource, Reflect, Clone, PartialEq, Debug, InspectorOptions)]
-#[reflect(Resource, InspectorOptions)]
-enum EditContext {
-    Edit(Option<Entity>, EditTool),
-    Spawn(MapObject)
-}
-
-impl Default for EditContext {
-    fn default() -> Self {
-        EditContext::Edit(None, EditTool::default())
-    }
-}
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
@@ -163,9 +123,9 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         //.add_plugin(bevy_framepace::FramepacePlugin)
         //.add_system(set_framerate.on_startup())
         .insert_resource(GameAsset::default())
-        .insert_resource(EditContext::Edit(None, EditTool::Select))
+        .insert_resource(edit_context::EditContext::Edit(None, edit_context::EditTool::Select))
         //.add_plugin(WorldInspectorPlugin::new())
-        .add_plugin(ResourceInspectorPlugin::<EditContext>::default())
+        .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
@@ -245,6 +205,14 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .register_type::<PrimitiveShape>()
         .add_system(cmp_primitive_shape::load)
         .add_system(cmp_primitive_shape::save)
+
+        .register_type::<RevoluteJoint>()
+        .add_system(cmp_revolute_joint::handle_user_input)
+        .add_system(cmp_revolute_joint::load
+                        .after(cmp_primitive_shape::load)
+                        .after(cmp_polygonal_shape::load)
+                        )
+        .add_system(cmp_revolute_joint::save)
 
         .register_type::<Rotator>()
         .add_system(cmp_rotator::system.in_set(OnUpdate(AppState::Game)))
@@ -840,33 +808,6 @@ fn handle_user_input(
                             }
                         }
 
-
-                        MapObject::RevoluteJoint(entity) => {
-                            if buttons.just_pressed(MouseButton::Left) {
-                                let (entity, transform, mut rigid_body, bbsize) = transform_q.get_mut(entity).unwrap();
-
-                                let joint = RevoluteJointBuilder::new()
-                                    .local_anchor1(Vec2::new(0.0, 0.0))
-                                    .local_anchor2(Vec2::new(0.0, 0.0));
-
-                                let base_entity = commands.spawn(RigidBody::Dynamic)
-                                                    .insert(TransformBundle {
-                                                        local: Transform {
-                                                            translation: transform.translation,
-                                                            ..Default::default()
-                                                        },
-                                                        ..default()
-                                                    })
-                                                    .id();
-
-                                commands.entity(entity)
-                                    .insert(ImpulseJoint::new(base_entity, joint));
-
-                                *rigid_body = RigidBody::Dynamic;
-
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
-                            }
-                        }
 
 
                         _ => {}
