@@ -21,26 +21,28 @@ pub fn handle_user_input(
     mut transform_q: Query<(Entity, &mut Transform, &mut RigidBody)>,
     ) {
     if let EditContext::Spawn(map_object) = edit_context.clone() {
-        if let MapObject::RevoluteJoint(entity) = map_object {
-            if buttons.just_pressed(MouseButton::Left) {
+        if let MapObject::RevoluteJoint(entities) = map_object {
+            for entity in entities.clone() {
                 let (entity, transform, mut rigid_body) = transform_q.get_mut(entity).unwrap();
 
                 let entity = add(&mut commands,
                                  &mut rigid_body,
                                  RevoluteJoint { child_entity: entity, translation: transform.translation, limits: [0.0, 0.0] });
-
-                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
             }
 
+            *edit_context = EditContext::Edit(entities, EditTool::Select);
         }
     }
 }
 
 
 pub fn system(
-    //mut rj_q: Query<(&Transform, &mut ImpulseJoint, &RevoluteJoint)>,
-    //mut rjb_q: Query<&mut Transform, (With<RevoluteJointBase>, Without<RevoluteJoint>)>,
+    mut rj_q: Query<(&mut ImpulseJoint, &mut RevoluteJoint)>,
+    mut rjb_q: Query<&mut Transform, (With<RevoluteJointBase>, Without<RevoluteJoint>)>,
 ) {
+    for (mut ij, rj) in rj_q.iter_mut() {
+    }
+
     //for (t, mut ij, rj) in rj_q.iter_mut() {
     //    let mut parent_t = rjb_q.get_mut(ij.parent).unwrap();
 

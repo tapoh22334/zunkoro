@@ -17,42 +17,79 @@ pub struct Shredder {
     pub time_offset: f32
 }
 
-pub fn add(commands: &mut Commands,
-                    game_assets: &Res<GameAsset>,
-                    shredder: Shredder) -> Entity {
-    let sprite_handle = game_assets.image_handles.get("shredder_512_handle").unwrap();
+#[derive(Bundle)]
+pub struct ShredderBundle {
+    interaction: Interaction,
+    rigid_body: RigidBody,
+    velocity: Velocity,
+    bbsize: BBSize,
+    fuse_time: FuseTime,
+    shredder: Shredder,
+    //#[bundle]
+    //transform_bundle: TransformBundle,
+    #[bundle]
+    sprite_bundle: SpriteBundle,
+}
 
-    let mut entity = commands.spawn((
-            SpriteBundle {
+impl From<(&Handle<Image>, &Shredder)> for ShredderBundle {
+    fn from(tuple: (&Handle<Image>, &Shredder)) -> Self {
+        let (handle, shredder) = tuple;
+        Self {
+            interaction: Interaction::default(),
+            rigid_body: RigidBody::KinematicVelocityBased,
+            velocity: Velocity {
+                linvel: Vec2::new(0.0, 0.0),
+                angvel: -3.0,
+            },
+            bbsize: BBSize{x: 512.0, y: 512.0},
+            fuse_time: FuseTime{timer: Timer::from_seconds(shredder.time_offset, TimerMode::Once)},
+            shredder: shredder.clone(),
+            //transform_bundle: TransformBundle {
+            //    local: Transform {
+            //        translation: Vec3::new(shredder.polyline[0].x, shredder.polyline[0].y, 0.0),
+            //        scale: shredder.scale * Vec3::ONE,
+            //        ..Default::default()
+            //    },
+            //    ..default()
+            //},
+            sprite_bundle: SpriteBundle {
                 sprite: Sprite {
                     ..default()
                 },
-                texture: sprite_handle.clone(),
-                ..default()
-            },
-        ));
-
-    entity
-        .insert(Interaction::default())
-        .insert(RigidBody::KinematicVelocityBased)
-        .insert(Velocity {
-            linvel: Vec2::new(0.0, 0.0),
-            angvel: -3.0,
-        });
-
-    entity.insert(TransformBundle {
-                local: Transform {
+                texture: handle.clone(),
+                transform: Transform {
                     translation: Vec3::new(shredder.polyline[0].x, shredder.polyline[0].y, 0.0),
                     scale: shredder.scale * Vec3::ONE,
                     ..Default::default()
                 },
                 ..default()
-                },
+            },
+        }
+    }
+}
+
+pub fn add_index(commands: &mut Commands,
+                    index: u32,
+                    game_assets: &Res<GameAsset>,
+                    shredder: Shredder) -> Entity {
+    let sprite_handle = game_assets.image_handles.get("shredder_512_handle").unwrap();
+
+    let mut entity = commands.get_or_spawn(Entity::from_raw(index));
+    entity.insert(
+            ShredderBundle::from((sprite_handle, &shredder))
         );
 
-    entity.insert(BBSize{x: 512.0, y: 512.0});
-    entity.insert(FuseTime{timer: Timer::from_seconds(shredder.time_offset, TimerMode::Once)} );
-    entity.insert(shredder);
+    return entity.id();
+}
+
+pub fn add(commands: &mut Commands,
+                    game_assets: &Res<GameAsset>,
+                    shredder: Shredder) -> Entity {
+    let sprite_handle = game_assets.image_handles.get("shredder_512_handle").unwrap();
+
+    let mut entity = commands.spawn(
+            ShredderBundle::from((sprite_handle, &shredder))
+        );
 
     return entity.id();
 
@@ -126,10 +163,10 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<Shredder> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(u32, Shredder)> = serde_json::from_str(&json_str).unwrap();
 
-            for e in elem_list {
-                add(&mut commands, &game_assets, e);
+            for (index, e) in elem_list {
+                add_index(&mut commands, index, &game_assets, e);
             }
         }
     }
@@ -138,17 +175,17 @@ pub fn load(
 
 use crate::ev_save_load_world::SaveWorldEvent;
 pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              q: Query<(&Transform, &Shredder)>,
+              q: Query<(Entity, &Transform, &Shredder)>,
               ) {
 
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut elem_list: Vec<Shredder> = vec![];
+        let mut elem_list: Vec<(u32, Shredder)> = vec![];
 
-        for (t, e) in q.iter() {
+        for (entity, t, e) in q.iter() {
             let mut e = e.clone();
             e.scale = t.scale.truncate().x;
-            elem_list.push(e.clone());
+            elem_list.push((entity.index(), e.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&elem_list).unwrap()).unwrap();

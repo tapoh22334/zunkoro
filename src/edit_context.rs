@@ -29,22 +29,22 @@ pub enum MapObject {
     PadAcceleration(Option<Vec2>),
     PrimitiveShape(cmp_primitive_shape::Shape),
     Shredder(Vec<Entity>, Vec<Vec2>),
-    VibratingShape(Entity),
-    RotatingShape(Entity),
-    RevoluteJoint(Entity),
+    VibratingShape(Vec<Entity>),
+    RotatingShape(Vec<Entity>),
+    RevoluteJoint(Vec<Entity>),
     Zundamon,
 }
 
 #[derive(Resource, Reflect, Clone, PartialEq, Debug, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
 pub enum EditContext {
-    Edit(Option<Entity>, EditTool),
+    Edit(Vec<Entity>, EditTool),
     Spawn(MapObject)
 }
 
 impl Default for EditContext {
     fn default() -> Self {
-        EditContext::Edit(None, EditTool::default())
+        EditContext::Edit(vec![], EditTool::default())
     }
 }
 

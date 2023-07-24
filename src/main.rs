@@ -103,6 +103,9 @@ pub struct Map;
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
 
+#[derive(Resource)]
+pub struct EguiWindowClicked(bool);
+
 fn main() {
 //use bevy_inspector_egui::quick::WorldInspectorPlugin;
 //use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
@@ -124,7 +127,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         //.add_plugin(bevy_framepace::FramepacePlugin)
         //.add_system(set_framerate.on_startup())
         .insert_resource(GameAsset::default())
-        .insert_resource(edit_context::EditContext::Edit(None, edit_context::EditTool::Select))
+        .insert_resource(edit_context::EditContext::Edit(vec![], edit_context::EditTool::Select))
+        .insert_resource(EguiWindowClicked(false))
         //.add_plugin(WorldInspectorPlugin::new())
         .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
@@ -136,8 +140,9 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
         //.add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
         .add_system(game_mode_select)
+        .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit))
+                                            .before(handle_user_input))
         .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
-        .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit)))
 
         .add_system(setup_ui.in_schedule(OnEnter(AppState::Game)))
 
@@ -338,7 +343,7 @@ fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
 
 
 fn load_map_polyline() -> Vec<Vec<Vec2>> {
-    let map_file = include_bytes!("../assets/map_mini1.map");
+    let map_file = include_bytes!("../assets/map_mini5.map");
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
 
@@ -427,7 +432,13 @@ fn handle_user_input(
     windows_q: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     mut transform_q: Query<(Entity, &mut Transform, &mut BBSize)>,
+    mut window_clicked: ResMut<EguiWindowClicked>,
     ) {
+
+    if window_clicked.0 {
+        println!("egui window clicked");
+        return;
+    }
 
     // Games typically only have one window (the primary window)
     let window = windows_q.single();
@@ -444,10 +455,15 @@ fn handle_user_input(
     {
         match edit_context.clone() {
             EditContext::Edit(pick, edit_tool) => {
-                if buttons.just_pressed(MouseButton::Left) {
+                if buttons.just_pressed(MouseButton::Left) 
+                    && (pick.len() == 0 || keys.pressed(KeyCode::LShift)) {
+                    let mut min_area = std::f32::MAX;
+                    let mut selected_entity = None;
+
                     for (entity, transform, size) in transform_q.iter() {
                         let sized_width = size.x * transform.scale.x;
                         let sized_height = size.y * transform.scale.y;
+                        let area = sized_width * sized_height;
 
                         if collide(transform.translation,
                                    Vec2::new(sized_width, sized_height),
@@ -455,39 +471,55 @@ fn handle_user_input(
                                    Vec2::new(0.0, 0.0)).is_some() {
                             println!("clicked {:?}", entity);
 
-                            *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                            if area < min_area {
+                                selected_entity = Some(entity);
+                                min_area = area;
+                            }
                         } 
+                    }
+
+                    if selected_entity.is_some() {
+                        if keys.pressed(KeyCode::LShift) {
+                            let mut new_pick = pick.clone();
+                            new_pick.push(selected_entity.unwrap());
+                            *edit_context = EditContext::Edit(new_pick, EditTool::Select);
+                        } else {
+                            *edit_context = EditContext::Edit(vec![selected_entity.unwrap()], EditTool::Select);
+                        }
                     }
                 }
 
                 if buttons.just_released(MouseButton::Left) {
                     if edit_tool != EditTool::Select {
-                        *edit_context = EditContext::Edit(pick, EditTool::Select);
+                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Select);
                     }
                 }
 
-                if pick.is_some() {
+                if pick.len() > 0 {
                     if keys.pressed(KeyCode::Escape) { 
-                        *edit_context = EditContext::Edit(None, EditTool::Select);
+                        *edit_context = EditContext::Edit(vec![], EditTool::Select);
                     } else if keys.pressed(KeyCode::Q) {
-                        *edit_context = EditContext::Edit(pick, EditTool::Select);
+                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Select);
                     } else if keys.pressed(KeyCode::T) {
-                        *edit_context = EditContext::Edit(pick, EditTool::Translate);
+                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Translate);
                     } else if keys.pressed(KeyCode::R) {
-                        *edit_context = EditContext::Edit(pick, EditTool::Rotate);
+                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Rotate);
                     } else if keys.pressed(KeyCode::S) {
-                        *edit_context = EditContext::Edit(pick, EditTool::Scale);
+                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Scale);
                     } else if edit_tool == EditTool::Scale && keys.pressed(KeyCode::D) {
-                        *edit_context = EditContext::Edit(pick, EditTool::ScaleDistort);
+                        *edit_context = EditContext::Edit(pick.clone(), EditTool::ScaleDistort);
                     } else if keys.pressed(KeyCode::Delete) {
-                        commands.entity(pick.unwrap()).despawn();
-                        *edit_context = EditContext::Edit(None, EditTool::Select);
+                        for e in pick.clone() {
+                            commands.entity(e).despawn();
+                        }
+                        *edit_context = EditContext::Edit(vec![], EditTool::Select);
                     }
                 }
 
                 match edit_tool {
                     EditTool::Translate => {
-                        if let Some(entity) = pick {
+                        if pick.len() > 0 {
+                            let entity = pick[0];
                             if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
                                 transform.translation.x = world_position.x;
                                 transform.translation.y = world_position.y;
@@ -496,7 +528,8 @@ fn handle_user_input(
                     }
 
                     EditTool::Rotate => {
-                        if let Some(entity) = pick {
+                        if pick.len() > 0 {
+                            let entity = pick[0];
                             if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let dir = (world_position - pos).normalize();
@@ -507,7 +540,8 @@ fn handle_user_input(
                     }
 
                     EditTool::Scale => {
-                        if let Some(entity) = pick {
+                        if pick.len() > 0 {
+                            let entity = pick[0];
                             if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
                                 let pos = Vec2::new(transform.translation.x, transform.translation.y);
                                 let r = pos.distance(world_position);
@@ -520,7 +554,8 @@ fn handle_user_input(
                     }
 
                     EditTool::ScaleDistort => {
-                        if let Some(entity) = pick {
+                        if pick.len() > 0 {
+                            let entity = pick[0];
                             if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let diff = world_position - pos;
@@ -547,7 +582,7 @@ fn handle_user_input(
                                     angle_range: (-0.25 * std::f32::consts::PI, 0.25 * std::f32::consts::PI)
                                 };
                                 let entity = cmp_artillery::add(&mut commands, &game_assets, artillery);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -558,7 +593,7 @@ fn handle_user_input(
                                     position: world_position,
                                 };
                                 let entity = cmp_block_zombie::add(&mut commands, block_zombie);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -569,7 +604,7 @@ fn handle_user_input(
                                     position: world_position,
                                 };
                                 let entity = cmp_converter_body::add(&mut commands, cb);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -579,7 +614,7 @@ fn handle_user_input(
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
                                 let entity = cmp_gear::add_simple(&mut commands, &game_assets, &image_assets, gs);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -589,7 +624,7 @@ fn handle_user_input(
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
                                 let entity = cmp_gear::add_sorting(&mut commands, &game_assets, &image_assets, gs);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -599,7 +634,7 @@ fn handle_user_input(
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
                                 let entity = cmp_gear::add_swirl(&mut commands, &game_assets, &image_assets, gs);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -635,7 +670,7 @@ fn handle_user_input(
 
                                     println!("GateTeleport exit added {:?}", gtext);
                                     let entity = cmp_gate_teleport::add_exit(&mut commands, gtext);
-                                    *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
 
                                 }
                             }
@@ -651,7 +686,7 @@ fn handle_user_input(
                                     spawn_offset_sec: 15.0,
                                 };
                                 let entity = cmp_gate_zombie::add(&mut commands, gz);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -664,7 +699,7 @@ fn handle_user_input(
                                     prob: 0.5,
                                 };
                                 let entity = cmp_gate_zundamon::add(&mut commands, gz);
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -686,7 +721,7 @@ fn handle_user_input(
                                     let entity = cmp_pad_velocity::add(&mut commands,
                                                                   &game_assets,
                                                                   pd);
-                                    *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                                 }
                             }
                         }
@@ -708,7 +743,7 @@ fn handle_user_input(
                                     let entity = cmp_pad_acceleration::add(&mut commands,
                                                                   &game_assets,
                                                                   pd);
-                                    *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                                }
                             }
                         }
@@ -723,7 +758,7 @@ fn handle_user_input(
                                 };
                                 //let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
                                 let entity = commands.spawn(PrimitiveShapeBundle::from((t, r, s, primitive_shape))).id();
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
@@ -765,7 +800,7 @@ fn handle_user_input(
                                     let entity = cmp_shredder::add(&mut commands,
                                                                   &game_assets,
                                                                   shredder);
-                                    *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                                 }
                             }
 
@@ -774,12 +809,12 @@ fn handle_user_input(
                         MapObject::Zundamon => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
+                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
                             }
                         }
 
-                        MapObject::VibratingShape(entity) => {
-                            if buttons.just_pressed(MouseButton::Left) {
+                        MapObject::VibratingShape(entities) => {
+                            for entity in entities.clone() {
                                 let (entity, transform, bbsize) = transform_q.get(entity).unwrap();
 
                                 let t = transform.translation.x;
@@ -794,20 +829,22 @@ fn handle_user_input(
                                 //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
                                 let entity = commands.entity(entity)
                                     .insert(vibrator).id();
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
+
+                            *edit_context = EditContext::Edit(entities, EditTool::Select);
                         }
 
 
-                        MapObject::RotatingShape(entity) => {
-                            if buttons.just_pressed(MouseButton::Left) {
+                        MapObject::RotatingShape(entities) => {
+                            for entity in entities.clone() {
                                 let rotator = Rotator {
                                     angvel: 1.5,
                                 };
                                 let entity = commands.entity(entity)
                                     .insert(rotator).id();
-                                *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
                             }
+
+                            *edit_context = EditContext::Edit(entities, EditTool::Select);
                         }
 
 
@@ -822,14 +859,17 @@ fn handle_user_input(
 fn spawn_map_object (
     mut egui_contexts: EguiContexts,
     mut edit_mode: ResMut<EditContext>,
+    mut window_clicked: ResMut<EguiWindowClicked>,
     ){
+    window_clicked.0 = false;
+    let mut new_edit_mode = None;
 
     egui::Window::new("spawn").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Artillery");
             if ui.button("Spawn").clicked() {
                 info!("Artillery spawned");
-                *edit_mode = EditContext::Spawn(MapObject::Artillery);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::Artillery));
             }
         });
 
@@ -837,7 +877,7 @@ fn spawn_map_object (
             ui.label("Block Zombie");
             if ui.button("Spawn").clicked() {
                 info!("Block Zombie spawned");
-                *edit_mode = EditContext::Spawn(MapObject::BlockZombie);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::BlockZombie));
             }
         });
 
@@ -845,7 +885,7 @@ fn spawn_map_object (
             ui.label("Converter Body ");
             if ui.button("Spawn").clicked() {
                 info!("Converter Body spawned");
-                *edit_mode = EditContext::Spawn(MapObject::ConverterBody);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::ConverterBody));
             }
         });
 
@@ -853,7 +893,7 @@ fn spawn_map_object (
             ui.label("Gear simple");
             if ui.button("Spawn").clicked() {
                 info!("Gear simple spawned");
-                *edit_mode = EditContext::Spawn(MapObject::GearSimple);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GearSimple));
             }
         });
 
@@ -861,7 +901,7 @@ fn spawn_map_object (
             ui.label("Gear sorting");
             if ui.button("Spawn").clicked() {
                 info!("Gear sorting spawned");
-                *edit_mode = EditContext::Spawn(MapObject::GearSorting);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GearSorting));
             }
         });
 
@@ -869,7 +909,7 @@ fn spawn_map_object (
             ui.label("Gear Swirl");
             if ui.button("Spawn").clicked() {
                 info!("Gear swirl spawned");
-                *edit_mode = EditContext::Spawn(MapObject::GearSwirl);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GearSwirl));
             }
         });
 
@@ -877,7 +917,7 @@ fn spawn_map_object (
             ui.label("Teleport Gate");
             if ui.button("Spawn").clicked() {
                 info!("Teleport Gate spawn start");
-                *edit_mode = EditContext::Spawn(MapObject::GateTeleport(None));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GateTeleport(None)));
             }
         });
 
@@ -885,7 +925,7 @@ fn spawn_map_object (
             ui.label("Zombie Gate");
             if ui.button("Spawn").clicked() {
                 info!("Zombie Gate spawned");
-                *edit_mode = EditContext::Spawn(MapObject::GateZombie);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GateZombie));
             }
         });
 
@@ -893,7 +933,7 @@ fn spawn_map_object (
             ui.label("Zundamon Gate");
             if ui.button("Spawn").clicked() {
                 info!("Zundamon Gate spawned");
-                *edit_mode = EditContext::Spawn(MapObject::GateZundamon);
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GateZundamon));
             }
         });
 
@@ -901,7 +941,7 @@ fn spawn_map_object (
             ui.label("Pad Velocity");
             if ui.button("Spawn").clicked() {
                 info!("Pad Velocity spawned");
-                *edit_mode = EditContext::Spawn(MapObject::PadVelocity(None));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::PadVelocity(None)));
             }
         });
 
@@ -909,34 +949,34 @@ fn spawn_map_object (
             ui.label("Pad Acceleration");
             if ui.button("Spawn").clicked() {
                 info!("Pad Acceleration spawned");
-                *edit_mode = EditContext::Spawn(MapObject::PadAcceleration(None));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::PadAcceleration(None)));
             }
         });
 
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Box");
             if ui.button("o").clicked() {
-                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SBox));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SBox)));
             }
 
             ui.label("Circle");
             if ui.button("o").clicked() {
-                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SCircle));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SCircle)));
             }
 
             ui.label("Dia");
             if ui.button("o").clicked() {
-                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SDia));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SDia)));
             }
 
             ui.label("Star");
             if ui.button("o").clicked() {
-                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SStar));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SStar)));
             }
 
             ui.label("Triangle");
             if ui.button("o").clicked() {
-                *edit_mode = EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::STriangle));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::STriangle)));
             }
         });
 
@@ -944,14 +984,14 @@ fn spawn_map_object (
             ui.label("Shredder");
             if ui.button("Spawn").clicked() {
                 info!("Shredder spawned");
-                *edit_mode = EditContext::Spawn(MapObject::Shredder(Vec::new(), Vec::new()));
+                new_edit_mode = Some(EditContext::Spawn(MapObject::Shredder(Vec::new(), Vec::new())));
             }
         });
 
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Zundamon");
             if ui.button("o").clicked() {
-                 *edit_mode = EditContext::Spawn(MapObject::Zundamon);
+                 new_edit_mode = Some(EditContext::Spawn(MapObject::Zundamon));
             }
         });
 
@@ -959,9 +999,9 @@ fn spawn_map_object (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Vibrator");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(entity_opt, edit_tool) = *edit_mode {
-                    if entity_opt.is_some() {
-                        *edit_mode = EditContext::Spawn(MapObject::VibratingShape(entity_opt.unwrap()));
+                if let EditContext::Edit(entity_vec, edit_tool) = edit_mode.clone() {
+                    if entity_vec.len() > 0 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::VibratingShape(entity_vec)));
                     } else {
                         info!("no entity selected");
                     }
@@ -974,9 +1014,9 @@ fn spawn_map_object (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Rotator");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(entity_opt, edit_tool) = *edit_mode {
-                    if entity_opt.is_some() {
-                        *edit_mode = EditContext::Spawn(MapObject::RotatingShape(entity_opt.unwrap()));
+                if let EditContext::Edit(entity_vec, edit_tool) = edit_mode.clone() {
+                    if entity_vec.len() > 0 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::RotatingShape(entity_vec)));
                     } else {
                         info!("no entity selected");
                     }
@@ -989,9 +1029,9 @@ fn spawn_map_object (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("RevoluteJoint");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(entity_opt, edit_tool) = *edit_mode {
-                    if entity_opt.is_some() {
-                        *edit_mode = EditContext::Spawn(MapObject::RevoluteJoint(entity_opt.unwrap()));
+                if let EditContext::Edit(entity_vec, edit_tool) = edit_mode.clone() {
+                    if entity_vec.len() > 0 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::RevoluteJoint(entity_vec)));
                     } else {
                         info!("no entity selected");
                     }
@@ -1002,6 +1042,11 @@ fn spawn_map_object (
         });
 
     });
+
+    if new_edit_mode.is_some() {
+        *edit_mode = new_edit_mode.unwrap();
+        window_clicked.0 = true;
+    }
 
 }
 
