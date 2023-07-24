@@ -92,7 +92,7 @@ use crate::cmp_main_camera::MainCamera;
 
 mod ev_save_load_world;
 use crate::ev_save_load_world::SaveWorldEvent;
-use crate::ev_save_load_world::{LoadWorldEvent, LoadWorldEventStage2};
+use crate::ev_save_load_world::LoadWorldEvent;
 
 mod edit_context;
 use crate::edit_context::*;
@@ -102,13 +102,6 @@ pub struct Map;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default, States)]
 enum AppState { #[default] Edit, Game}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum SystemLabel {
-    Load1,
-    Load2,
-}
-
 
 fn main() {
 //use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -150,11 +143,6 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .add_event::<SaveWorldEvent>()
         .add_event::<LoadWorldEvent>()
-        .add_event::<LoadWorldEventStage2>()
-        .add_system(ev_save_load_world::forward_event
-                    //Please ensure that the transmitter of LoadWorldEvent, which is game_move_select,
-                    //is executed before forward_event to process LoadWorldEventStage2 in the next stage.
-                    .after(game_mode_select))
 
         //.add_system(bdl_rotating_shape::load)
         //.add_system(bdl_rotating_shape::save)
@@ -222,6 +210,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .register_type::<RevoluteJoint>()
         .add_event::<DelayLoadRevoluteJoint>()
         .add_system(cmp_revolute_joint::handle_user_input)
+        .add_system(cmp_revolute_joint::system)
         .add_system(cmp_revolute_joint::load.before(
                         cmp_revolute_joint::delay_load))
         .add_system(cmp_revolute_joint::delay_load)
@@ -349,7 +338,7 @@ fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
 
 
 fn load_map_polyline() -> Vec<Vec<Vec2>> {
-    let map_file = include_bytes!("../assets/map_mini3.map");
+    let map_file = include_bytes!("../assets/map_mini1.map");
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
 
@@ -437,7 +426,7 @@ fn handle_user_input(
     mut edit_context: ResMut<EditContext>,
     windows_q: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    mut transform_q: Query<(Entity, &mut Transform, &mut RigidBody, &mut BBSize)>,
+    mut transform_q: Query<(Entity, &mut Transform, &mut BBSize)>,
     ) {
 
     // Games typically only have one window (the primary window)
@@ -456,7 +445,7 @@ fn handle_user_input(
         match edit_context.clone() {
             EditContext::Edit(pick, edit_tool) => {
                 if buttons.just_pressed(MouseButton::Left) {
-                    for (entity, transform, _, size) in transform_q.iter() {
+                    for (entity, transform, size) in transform_q.iter() {
                         let sized_width = size.x * transform.scale.x;
                         let sized_height = size.y * transform.scale.y;
 
@@ -499,7 +488,7 @@ fn handle_user_input(
                 match edit_tool {
                     EditTool::Translate => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, _, _)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
                                 transform.translation.x = world_position.x;
                                 transform.translation.y = world_position.y;
                             }
@@ -508,7 +497,7 @@ fn handle_user_input(
 
                     EditTool::Rotate => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, _, _)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let dir = (world_position - pos).normalize();
                                 let angle = Vec2::new(0.0, 1.0).angle_between(dir);
@@ -519,7 +508,7 @@ fn handle_user_input(
 
                     EditTool::Scale => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, _, bbsize)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
                                 let pos = Vec2::new(transform.translation.x, transform.translation.y);
                                 let r = pos.distance(world_position);
                                 let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
@@ -532,7 +521,7 @@ fn handle_user_input(
 
                     EditTool::ScaleDistort => {
                         if let Some(entity) = pick {
-                            if let Ok((_, mut transform, _, bbsize)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let diff = world_position - pos;
                                 let scale = diff / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
@@ -791,7 +780,7 @@ fn handle_user_input(
 
                         MapObject::VibratingShape(entity) => {
                             if buttons.just_pressed(MouseButton::Left) {
-                                let (entity, transform, _, bbsize) = transform_q.get(entity).unwrap();
+                                let (entity, transform, bbsize) = transform_q.get(entity).unwrap();
 
                                 let t = transform.translation.x;
                                 let distance = cmp_primitive_shape::DEFAULT_SIZE_X;

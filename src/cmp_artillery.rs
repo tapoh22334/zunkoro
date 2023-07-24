@@ -106,14 +106,14 @@ pub fn system(
 
 pub fn system_fire(
     rapier_context: Res<RapierContext>,
-    mut ball_q: Query<(Entity, &mut Transform, &mut Velocity), With<Ball>>,
+    mut ball_q: Query<(Entity, &mut Transform, &mut Velocity, &Ball)>,
     artillery_q: Query<(Entity, &Transform, &BBSize, &Artillery), Without<Ball>>,
 ) {
     for (artillery_e, artillery_transform, bbsize, artillery) in artillery_q.iter() {
-        for (ball_e, mut ball_transform, mut ball_velocity) in ball_q.iter_mut() {
+        for (ball_e, mut ball_transform, mut ball_velocity, ball) in ball_q.iter_mut() {
             if rapier_context.intersection_pair(artillery_e, ball_e) == Some(true) {
                 let dir = Quat::from_rotation_z(artillery.angle).mul_vec3(Vec3::new(1.0, 0.0, 0.0));
-                let dist = bbsize.x / 2.0 * artillery_transform.scale.x + 16.0;
+                let dist = bbsize.x / 2.0 * artillery_transform.scale.x + ball.radius + 1.0;
                 ball_transform.translation = artillery_transform.translation + dir * dist;
                 ball_velocity.linvel = dir.truncate() * 400.0;
             }

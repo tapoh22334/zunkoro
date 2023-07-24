@@ -8,7 +8,11 @@ use crate::edit_context::*;
 pub struct RevoluteJoint {
     pub child_entity: Entity,
     pub translation: Vec3,
+    pub limits: [Real; 2],
 }
+
+#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+pub struct RevoluteJointBase;
 
 pub fn handle_user_input(
     mut commands: Commands,
@@ -21,7 +25,9 @@ pub fn handle_user_input(
             if buttons.just_pressed(MouseButton::Left) {
                 let (entity, transform, mut rigid_body) = transform_q.get_mut(entity).unwrap();
 
-                let entity = add(&mut commands, &mut rigid_body, RevoluteJoint { child_entity: entity, translation: transform.translation });
+                let entity = add(&mut commands,
+                                 &mut rigid_body,
+                                 RevoluteJoint { child_entity: entity, translation: transform.translation, limits: [0.0, 0.0] });
 
                 *edit_context = EditContext::Edit(Some(entity), EditTool::Select);
             }
@@ -29,6 +35,23 @@ pub fn handle_user_input(
         }
     }
 }
+
+
+pub fn system(
+    //mut rj_q: Query<(&Transform, &mut ImpulseJoint, &RevoluteJoint)>,
+    //mut rjb_q: Query<&mut Transform, (With<RevoluteJointBase>, Without<RevoluteJoint>)>,
+) {
+    //for (t, mut ij, rj) in rj_q.iter_mut() {
+    //    let mut parent_t = rjb_q.get_mut(ij.parent).unwrap();
+
+    //    println!("{:?}", parent_t);
+    //    println!("{:?}", t);
+    //    if *parent_t != *t {
+    //        *parent_t = *t;
+    //    }
+    //}
+}
+
 
 fn add(commands: &mut Commands, rigid_body: &mut RigidBody, revolute_joint: RevoluteJoint) -> Entity {
     let joint = RevoluteJointBuilder::new()
@@ -43,13 +66,13 @@ fn add(commands: &mut Commands, rigid_body: &mut RigidBody, revolute_joint: Revo
             },
             ..default()
         })
+        .insert(RevoluteJointBase)
     .id();
 
     let mut entity = commands.get_entity(revolute_joint.child_entity).unwrap();
     entity
         .insert(ImpulseJoint::new(base_entity, joint))
         .insert(revolute_joint);
-
 
     *rigid_body = RigidBody::Dynamic;
 
@@ -90,7 +113,11 @@ pub fn load(
                 let entity = commands.get_or_spawn(Entity::from_raw(id)).id();
                 let mut rigid_body = q.get_mut(entity).unwrap();
 
-                add(&mut commands, &mut rigid_body, RevoluteJoint { child_entity: entity, translation: v.translation });
+                add(&mut commands,
+                    &mut rigid_body,
+                    RevoluteJoint { child_entity: entity,
+                                    translation: v.translation,
+                                    limits: v.limits });
             }
         }
     }
