@@ -5,7 +5,7 @@ use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball;
 
-const BALL_SIZE: f32 = 14.0;
+const BALL_SIZE: f32 = 10.0;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct GateZundamon {

@@ -130,8 +130,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .insert_resource(edit_context::EditContext::Edit(vec![], edit_context::EditTool::Select))
         .insert_resource(EguiWindowClicked(false))
         //.add_plugin(WorldInspectorPlugin::new())
-        .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
-        .add_plugin(RapierDebugRenderPlugin::default())
+        //.add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
+        //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
@@ -695,7 +695,7 @@ fn handle_user_input(
                                 let gz = GateZundamon {
                                     size: Vec2::new(128.0, 32.0),
                                     position: world_position,
-                                    remain: 100,
+                                    remain: 300,
                                     prob: 0.5,
                                 };
                                 let entity = cmp_gate_zundamon::add(&mut commands, gz);
