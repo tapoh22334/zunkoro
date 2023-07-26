@@ -33,9 +33,9 @@ use crate::cmp_converter_body::ConverterBody;
 mod cmp_fuse_time;
 use crate::cmp_fuse_time::FuseTime;
 
-mod cmp_gate_general;
-use crate::cmp_gate_general::GateGeneral;
-use crate::cmp_gate_general::GateGeneralBundle;
+mod cmp_gate_generic;
+use crate::cmp_gate_generic::GateGeneric;
+use crate::cmp_gate_generic::GateGenericBundle;
 
 mod cmp_gate_teleport;
 use crate::cmp_gate_teleport::GateTeleportExit;
@@ -134,8 +134,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .insert_resource(edit_context::EditContext::Edit(vec![], edit_context::EditTool::Select))
         .insert_resource(EguiWindowClicked(false))
         //.add_plugin(WorldInspectorPlugin::new())
-        //.add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
-        //.add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
@@ -146,6 +146,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(game_mode_select)
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit))
                                             .before(handle_user_input))
+        .insert_resource(WorldPosition { translation: Vec2::ZERO })
+        .add_system(edit_context::update_world_position)
         .add_system(handle_user_input.in_set(OnUpdate(AppState::Edit)))
 
         .add_system(setup_ui.in_schedule(OnEnter(AppState::Game)))
@@ -178,6 +180,12 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_converter_body::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<FuseTime>()
+
+        .register_type::<GateGeneric>()
+        .add_system(cmp_gate_generic::handle_user_input)
+        .add_system(cmp_gate_generic::load)
+        .add_system(cmp_gate_generic::save)
+        .add_system(cmp_gate_generic::system_setup.in_schedule(OnEnter(AppState::Game)))
 
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
@@ -915,6 +923,22 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Gear swirl spawned");
                 new_edit_mode = Some(EditContext::Spawn(MapObject::GearSwirl));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Generic Gate");
+            if ui.button("Spawn").clicked() {
+                info!("Generic Gate spawn start");
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GateGeneric));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Teleport Gate");
+            if ui.button("Spawn").clicked() {
+                info!("Teleport Gate spawn start");
+                new_edit_mode = Some(EditContext::Spawn(MapObject::GateTeleport(None)));
             }
         });
 
