@@ -33,6 +33,10 @@ use crate::cmp_converter_body::ConverterBody;
 mod cmp_fuse_time;
 use crate::cmp_fuse_time::FuseTime;
 
+mod cmp_gate_general;
+use crate::cmp_gate_general::GateGeneral;
+use crate::cmp_gate_general::GateGeneralBundle;
+
 mod cmp_gate_teleport;
 use crate::cmp_gate_teleport::GateTeleportExit;
 use crate::cmp_gate_teleport::GateTeleportEntrance;
@@ -343,7 +347,7 @@ fn setup_ui(commands: Commands, game_assets: Res<GameAsset>) {
 
 
 fn load_map_polyline() -> Vec<Vec<Vec2>> {
-    let map_file = include_bytes!("../assets/map_mini5.map");
+    let map_file = include_bytes!("../assets/map7.map");
     let file_contents = String::from_utf8_lossy(map_file);
     let map: Vec<Vec<Vec2>> = serde_json::from_str(&file_contents).unwrap();
 
@@ -520,9 +524,10 @@ fn handle_user_input(
                     EditTool::Translate => {
                         if pick.len() > 0 {
                             let entity = pick[0];
+                            let round_off = |x: f32| -> f32 { (x / 10.0).round() * 10.0 };
                             if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
-                                transform.translation.x = world_position.x;
-                                transform.translation.y = world_position.y;
+                                transform.translation.x = round_off(world_position.x);
+                                transform.translation.y = round_off(world_position.y);
                             }
                         }
                     }
