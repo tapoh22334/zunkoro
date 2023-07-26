@@ -34,6 +34,8 @@ mod cmp_fuse_time;
 use crate::cmp_fuse_time::FuseTime;
 
 mod cmp_gate_generic;
+use crate::cmp_gate_generic::SpawnBall;
+use crate::cmp_gate_generic::BallType;
 use crate::cmp_gate_generic::GateGeneric;
 use crate::cmp_gate_generic::GateGenericBundle;
 
@@ -144,6 +146,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
         //.add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
         .add_system(game_mode_select)
+        .add_system(debug_spawn)
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit))
                                             .before(handle_user_input))
         .insert_resource(WorldPosition { translation: Vec2::ZERO })
@@ -182,10 +185,12 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .register_type::<FuseTime>()
 
         .register_type::<GateGeneric>()
+        .add_event::<SpawnBall>()
         .add_system(cmp_gate_generic::handle_user_input)
         .add_system(cmp_gate_generic::load)
         .add_system(cmp_gate_generic::save)
         .add_system(cmp_gate_generic::system_setup.in_schedule(OnEnter(AppState::Game)))
+        .add_system(cmp_gate_generic::system)
 
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
@@ -869,6 +874,34 @@ fn handle_user_input(
     }
 }
 
+fn debug_spawn (
+    mut egui_contexts: EguiContexts,
+    mut edit_mode: ResMut<EditContext>,
+    mut window_clicked: ResMut<EguiWindowClicked>,
+    mut event: EventWriter<cmp_gate_generic::SpawnBall>,
+    ){
+
+    egui::Window::new("debug_spawn").show(egui_contexts.ctx_mut(), |ui: &mut egui::Ui| {
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("spawn");
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(pick, edit_tool) = edit_mode.clone() {
+                    let entity = pick[0];
+                    event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zundamon));
+                    println!("send event");
+                }
+            }
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(pick, edit_tool) = edit_mode.clone() {
+                    let entity = pick[0];
+                    event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zombie));
+                    println!("send event");
+                }
+            }
+        });
+    });
+}
+
 fn spawn_map_object (
     mut egui_contexts: EguiContexts,
     mut edit_mode: ResMut<EditContext>,
@@ -931,14 +964,6 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Generic Gate spawn start");
                 new_edit_mode = Some(EditContext::Spawn(MapObject::GateGeneric));
-            }
-        });
-
-        ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("Teleport Gate");
-            if ui.button("Spawn").clicked() {
-                info!("Teleport Gate spawn start");
-                new_edit_mode = Some(EditContext::Spawn(MapObject::GateTeleport(None)));
             }
         });
 

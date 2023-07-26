@@ -2,9 +2,12 @@ use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use rand::prelude::*;
 
+use crate::cmp_ball::Zundamon;
+use crate::cmp_ball_zombie::Zombie;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball;
+use crate::cmp_ball_zombie;
 
 use crate::edit_context::*;
 
@@ -12,9 +15,18 @@ const BALL_SIZE: f32 = 10.0;
 pub const DEFAULT_SIZE_X: f32 = 64.0;
 pub const DEFAULT_SIZE_Y: f32 = 64.0;
 
+
+#[derive(Component, Reflect, FromReflect, Clone, Copy, Serialize, Deserialize, Debug)]
+pub enum BallType {
+    Zundamon,
+    Zombie,
+}
+
+pub struct SpawnBall(pub Entity, pub BallType);
+
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct GateGeneric {
-    pub remain: i32,
+    pub remain: Vec<BallType>,
     pub prob: f32,
     pub ball_radius: f32,
 }
@@ -43,7 +55,7 @@ impl Default for GateGenericBundle {
             },
             bbsize: BBSize {x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y},
             gate_generic: GateGeneric {
-                remain: 1,
+                remain: vec![],
                 prob: 1.0,
                 ball_radius: BALL_SIZE,
             }
@@ -52,23 +64,32 @@ impl Default for GateGenericBundle {
     }
 }
 
+impl From<Vec3> for GateGenericBundle {
+    fn from(translation: Vec3) -> Self {
+        let mut bundle = GateGenericBundle::default();
+        bundle.sprite_bundle.transform = Transform {
+                    translation,
+                    scale: Vec3::ONE,
+                    ..default()
+                };
+        bundle
+    }
+}
 
 impl From<(Vec3, Quat, Vec3, GateGeneric)> for GateGenericBundle {
     fn from(tuple: (Vec3, Quat, Vec3, GateGeneric)) -> Self {
         let (translation, rotation, scale, gate_generic) = tuple;
 
-        Self {
-            sprite_bundle: SpriteBundle {
-                transform: Transform {
+        let mut bundle = GateGenericBundle::default();
+
+        bundle.sprite_bundle.transform = Transform {
                     translation,
                     rotation,
                     scale,
-                },
-                ..default()
-            },
-            gate_generic,
-            ..default()
-        }
+                };
+        bundle.gate_generic = gate_generic;
+
+        bundle
     }
 }
 
@@ -85,16 +106,10 @@ pub fn handle_user_input(
 
     if let EditContext::Spawn(map_object) = edit_context.clone() {
         if let MapObject::GateGeneric = map_object {
-            let entity = commands.spawn(GateGenericBundle {
-                sprite_bundle: SpriteBundle {
-                    transform: Transform {
-                        translation: Vec3::from((world_position.translation, 0.0)),
-                        ..default()
-                    },
-                    ..default()
-                },
-                ..default()
-            });
+
+            let entity = commands.spawn(
+                GateGenericBundle::from(Vec3::from((world_position.translation, 0.0)))
+                );
 
             *edit_context = EditContext::Edit(vec![entity.id()], EditTool::Select);
         }
@@ -106,7 +121,7 @@ pub fn system_setup(
     ) {
 
     for mut sprite in query.iter_mut() {
-        let color = Color::Rgba { red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0, };
+        let color = Color::Rgba { red: 0.0, green: 0.0, blue: 0.0, alpha: 0.0, };
         sprite.color = color;
     }
 
@@ -115,12 +130,23 @@ pub fn system_setup(
 pub fn system(
     mut commands: Commands,
     game_assets: Res<GameAsset>,
+    mut event: EventReader<SpawnBall>,
     mut query: Query<(Entity, &Transform, &BBSize, &mut GateGeneric)>,
 ) {
-    let mut rng = rand::thread_rng();
 
+    for e in event.iter() {
+        let entity = e.0;
+        let balltype = e.1;
+
+        let (_, _, _, mut gate_generic) = query.get_mut(entity).unwrap();
+        gate_generic.remain.push(balltype);
+        println!("receved event");
+    }
+
+    let mut rng = rand::thread_rng();
     for (entity, transform, bbsize, mut gate_generic) in query.iter_mut() {
-        if gate_generic.remain > 0 {
+        if gate_generic.remain.len() > 0 {
+            println!("gate_generic.remain.len() {}", gate_generic.remain.len());
             if rng.gen::<f32>() < gate_generic.prob {
                 let size = Vec2::new(bbsize.x, bbsize.y) * transform.scale.truncate();
                 let pos_max = transform.translation.truncate() + (size / 2.0);
@@ -129,11 +155,18 @@ pub fn system(
                 let x = rng.gen_range(pos_min.x .. pos_max.x);
                 let y = rng.gen_range(pos_min.y .. pos_max.y);
 
-                cmp_ball::add(&mut commands, &game_assets, Vec2::new(x, y), gate_generic.ball_radius, Vec2::new(0.0, 0.0));
-                gate_generic.remain -= 1;
+                let rad = gate_generic.ball_radius;
+                let balltype = gate_generic.remain.pop().unwrap();
+                match(balltype) {
+                    BallType::Zundamon => {
+                        cmp_ball::add(&mut commands, &game_assets, Vec2::new(x, y), rad, Vec2::new(0.0, 0.0));
+                    },
+
+                    BallType::Zombie => {
+                        cmp_ball_zombie::add(&mut commands, &game_assets, Vec2::new(x, y), rad, Vec2::new(0.0, 0.0));
+                    }
+                }
             }
-        } else {
-            commands.get_entity(entity).unwrap().despawn();
         }
     }
 }
