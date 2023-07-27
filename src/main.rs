@@ -113,7 +113,7 @@ enum AppState { #[default] Edit, Game}
 pub struct EguiWindowClicked(bool);
 
 fn main() {
-//use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 //use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
@@ -888,14 +888,14 @@ fn debug_spawn (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("spawn");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(MapObject::None, pick, edit_tool) = edit_mode.clone() {
+                if let EditContext::Edit(MapObject::GateGeneric, pick, edit_tool) = edit_mode.clone() {
                     let entity = pick[0];
                     event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zundamon));
                     println!("send event");
                 }
             }
             if ui.button("o").clicked() {
-                if let EditContext::Edit(MapObject::None, pick, edit_tool) = edit_mode.clone() {
+                if let EditContext::Edit(MapObject::GateGeneric, pick, edit_tool) = edit_mode.clone() {
                     let entity = pick[0];
                     event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zombie));
                     println!("send event");

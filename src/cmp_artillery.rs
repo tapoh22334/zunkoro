@@ -6,6 +6,7 @@ use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball::Ball;
 
 const DEFAULT_RADIUS: f32 = 512.0 / 2.0;
+const DEFAULT_RANGE: f32 = 0.25 * std::f32::consts::PI;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug, Default)]
 pub struct Artillery {
@@ -72,14 +73,16 @@ pub struct ArtilleryBarrelBundle {
 }
 
 
-impl From<&GameAsset> for ArtilleryBarrelBundle {
-    fn from(game_assets: &GameAsset) -> Self {
+impl From<(Quat, &GameAsset)> for ArtilleryBarrelBundle {
+    fn from(tuple: (Quat, &GameAsset)) -> Self {
+        let (rotation, game_assets) = tuple;
         let sprite_handle = game_assets.image_handles.get("artillery_frag2").unwrap();
         Self {
             barrel: Barrel,
             sprite_bundle: SpriteBundle {
                 texture: sprite_handle.clone(),
                 transform: Transform {
+                    rotation,
                     scale: Vec3::ONE,
                     ..Default::default()
                 },
@@ -89,58 +92,6 @@ impl From<&GameAsset> for ArtilleryBarrelBundle {
     }
 }
 
-
-pub fn add(commands: &mut Commands,
-            game_assets: &Res<GameAsset>,
-            translation: Vec3,
-            scale: Vec3,
-            artillery: Artillery) -> Entity {
-
-    // Fragment 1
-    let sprite_handle = game_assets.image_handles.get("artillery_frag1").unwrap();
-    let mut entity = commands.spawn(artillery);
-
-    entity
-        .insert((
-            SpriteBundle {
-                sprite: Sprite {
-                    ..default()
-                },
-                texture: sprite_handle.clone(),
-                transform: Transform {
-                    translation,
-                    scale,
-                    ..Default::default()
-                },
-                ..default()
-            },
-            ));
-
-    entity
-        .insert(BBSize{x: 512.0, y: 512.0})
-        .insert(Collider::ball(256.0))
-        .insert(CollisionGroups::new(Group::GROUP_1, Group::GROUP_1 | Group::GROUP_2))
-        .insert(Sensor)
-        ;
-
-    // Fragment2
-    entity.with_children(|children| {
-        let sprite_handle = game_assets.image_handles.get("artillery_frag2").unwrap();
-        let mut child = children.spawn(Barrel);
-        child.insert(SpriteBundle {
-                sprite: Sprite {
-                    ..default()
-                },
-                texture: sprite_handle.clone(),
-                transform: Transform::from_xyz(0.0, 0.0, 2.0),
-                ..default()
-            },);
-
-    });
-
-
-    return entity.id();
-}
 
 fn quantize_angle(angle: f32, num_steps: u8) -> f32 {
     let step_size = 2.0 * std::f32::consts::PI / num_steps as f32;
@@ -165,9 +116,9 @@ pub fn handle_user_input(
             if let MapObject::Artillery = map_object {
                 if buttons.just_pressed(MouseButton::Left) {
                     let artillery = Artillery {
-                        angvel: 0.1,
+                        angvel: 0.5,
                         angle: 0.0,
-                        angle_range: (-0.25 * std::f32::consts::PI, 0.25 * std::f32::consts::PI)
+                        angle_range: (-DEFAULT_RANGE, DEFAULT_RANGE)
                     };
                     let game_assets = game_assets.into_inner();
                     let mut entity = commands.spawn(ArtilleryBaseBundle::from((
@@ -177,7 +128,7 @@ pub fn handle_user_input(
                                 game_assets,
                                 )));
                     entity.with_children(|children| {
-                        children.spawn(ArtilleryBarrelBundle::from(game_assets));
+                        children.spawn(ArtilleryBarrelBundle::from((Quat::from_rotation_z(0.0), game_assets)));
                     });
                     entity.insert(MapObject::Artillery);
                     *edit_context = EditContext::Edit(MapObject::Artillery, vec![entity.id()], EditTool::Select);
@@ -204,9 +155,7 @@ pub fn handle_user_input(
 
             barrel_transform.rotation = Quat::from_rotation_z(angle);
             artillery.angle = angle;
-
-            let range = 0.25 * std::f32::consts::PI;
-            artillery.angle_range = (angle - range, angle + range)
+            artillery.angle_range = (angle - DEFAULT_RANGE, angle + DEFAULT_RANGE)
         }
     }
 
@@ -269,12 +218,14 @@ pub fn load(
         if let Ok(json_str) = json_str {
             let elem_list: Vec<(u32, u32, Vec3, Quat, Vec3, Artillery)> = serde_json::from_str(&json_str).unwrap();
 
-            for (i, i2, t, r, s, a) in elem_list {
+            for (i, i2, t, _, s, a) in elem_list {
+                let rotation = Quat::from_rotation_z(a.angle);
                 let entity2 = commands.get_or_spawn(Entity::from_raw(i2))
-                                    .insert(ArtilleryBarrelBundle::from( game_assets )).id();
+                                    .insert(ArtilleryBarrelBundle::from(( rotation, game_assets ))).id();
 
                 let entity = commands.get_or_spawn(Entity::from_raw(i))
                                     .insert(ArtilleryBaseBundle::from((t, s, a, game_assets)))
+                                    .insert(MapObject::Artillery)
                                     .push_children(&[entity2]);
 
             }

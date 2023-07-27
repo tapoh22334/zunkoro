@@ -29,6 +29,7 @@ pub enum MapObject {
     GateZundamon,
     PadVelocity(Option<Vec2>),
     PadAcceleration(Option<Vec2>),
+    PolygonalShape,
     PrimitiveShape(cmp_primitive_shape::Shape),
     Shredder(Vec<Entity>, Vec<Vec2>),
     VibratingShape(Vec<Entity>),

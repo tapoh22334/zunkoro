@@ -3,6 +3,7 @@ use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 use bevy_prototype_lyon::prelude::*;
+use crate::edit_context::*;
 
 use crate::BBSize;
 use crate::constants;
@@ -39,6 +40,7 @@ pub struct PolygonalShapeBundle {
     velocity: Velocity,
     rigid_body: RigidBody,
     mass_property: ColliderMassProperties,
+    map_object: MapObject,
     #[bundle]
     shape_bundle: ShapeBundle,
 }
@@ -67,6 +69,7 @@ impl Default for PolygonalShapeBundle {
                 mass: constants::C_DEFAULT_MASS,
                 principal_inertia: constants::C_DEFAULT_INERTIA,
             }),
+            map_object: MapObject::PolygonalShape,
             shape_bundle: ShapeBundle{
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
