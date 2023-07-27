@@ -62,8 +62,8 @@ fn random_sprite_handle(game_assets: &GameAsset) -> &Handle<Image> {
     game_assets.image_handles.get(random_image).unwrap()
 }
 
-impl From<(&Vec2, f32, &Vec2, &GameAsset)> for BallBundle {
-    fn from(tuple: (&Vec2, f32, &Vec2, &GameAsset)) -> Self {
+impl From<(Vec2, f32, Vec2, &GameAsset)> for BallBundle {
+    fn from(tuple: (Vec2, f32, Vec2, &GameAsset)) -> Self {
         let mut bundle = BallBundle::default();
         let (translation, radius, velocity, game_assets) = tuple;
 
@@ -76,7 +76,7 @@ impl From<(&Vec2, f32, &Vec2, &GameAsset)> for BallBundle {
             },
             texture: sprite_handle.clone(),
             transform: Transform {
-                translation: Vec3::from((*translation, 0.0)),
+                translation: Vec3::from((translation, 1.0)),
                 ..default()
             },
             ..default()
@@ -87,47 +87,9 @@ impl From<(&Vec2, f32, &Vec2, &GameAsset)> for BallBundle {
 }
 
 
-pub fn add(commands: &mut Commands, game_assets: &Res<GameAsset>, pos: Vec2, r: f32, vel: Vec2) -> Entity {
-    let sprite_handle = random_sprite_handle(&game_assets);
-
-    let collider = Collider::ball(r);
-
-    let mut entity = commands.spawn(Ball {radius: r, previous_position: None});
-    entity
-        .insert(Zundamon)
-        .insert(RigidBody::Dynamic)
-        .insert(Restitution::coefficient(0.1))
-        .insert(Friction::coefficient(0.011))
-        .insert(collider)
-        .insert(CollisionGroups::new(Group::GROUP_1, Group::ALL))
-        .insert(SpriteBundle {
-                    sprite: Sprite {
-                        custom_size: Some(Vec2::ONE * (r * 2.0)),
-                        ..default()
-                    },
-                    texture: sprite_handle.clone(),
-                    ..default()
-        })
-        .insert(TransformBundle {
-                    local: Transform {
-                                translation: Vec3::new(pos.x, pos.y, 1.0),
-                                //scale: Vec3::ONE / r,
-                                ..Default::default()
-                            },
-                    ..default()
-        })
-        .insert(Velocity {
-            linvel: vel,
-            angvel: 0.0,
-        })
-    ;
-
-    entity.id()
-}
-
 pub fn kill(commands: &mut Commands,
             audio: &Res<Audio>,
-            game_assets: &Res<GameAsset>,
+            game_assets: &GameAsset,
             entity: Entity,
             trans: &Transform,
             ) {

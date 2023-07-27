@@ -131,6 +131,8 @@ pub fn system_kill(
     shredder_q: Query<(&Transform, &BBSize), With<Shredder>>,
     ball_q: Query<&Transform, With<Ball>>,
 ) {
+    let game_assets = game_assets.into_inner();
+
     for (transform, bbsize) in shredder_q.iter(){
         let r = bbsize.x / 2.0 * transform.scale.truncate().x * 0.9;
         let shape = Collider::ball(r);
@@ -142,7 +144,7 @@ pub fn system_kill(
         rapier_context.intersections_with_shape(
             shape_pos, shape_rot, &shape, filter, |entity| {
                 let transform = ball_q.get(entity).unwrap();
-                cmp_ball::kill(&mut commands, &audio, &game_assets, entity, &transform);
+                cmp_ball::kill(&mut commands, &audio, game_assets, entity, &transform);
                 true // Return `false` instead if we want to stop searching for other colliders that contain this point.
         });
 

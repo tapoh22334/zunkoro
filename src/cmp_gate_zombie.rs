@@ -48,6 +48,7 @@ pub fn system(
     mut query: Query<(Entity, &Transform, &BBSize, &mut FuseTime, &mut GateZombie)>,
 ) {
     let mut rng = rand::thread_rng();
+    let game_assets = game_assets.into_inner();
 
     for (entity, transform, bbsize, mut fuse_time, mut gate_zombie) in query.iter_mut() {
         fuse_time.timer.tick(time.delta());
@@ -62,7 +63,8 @@ pub fn system(
                 let x = rng.gen_range(pos_min.x .. pos_max.x);
                 let y = rng.gen_range(pos_min.y .. pos_max.y);
 
-                cmp_ball_zombie::add(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
+                let _ = commands.spawn(
+                    cmp_ball_zombie::BallZombieBundle::from((Vec2::new(x, y), BALL_SIZE, Vec2::ZERO, game_assets)));
                 gate_zombie.remain -= 1;
             }
         } else {

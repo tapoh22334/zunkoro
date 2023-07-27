@@ -827,7 +827,8 @@ fn handle_user_input(
 
                         MapObject::Zundamon => {
                             if buttons.just_pressed(MouseButton::Left) {
-                                let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
+                                let entity = commands.spawn(
+                                    cmp_ball::BallBundle::from((world_position, 40.0, Vec2::ZERO, game_assets.into_inner()))).id();
                                 *edit_context = EditContext::Edit(MapObject::Zundamon, vec![entity], EditTool::Select);
                             }
                         }

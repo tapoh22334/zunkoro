@@ -134,6 +134,7 @@ pub fn system(
     mut event: EventReader<SpawnBall>,
     mut query: Query<(Entity, &Transform, &BBSize, &mut GateGeneric)>,
 ) {
+    let game_assets = game_assets.into_inner();
 
     for e in event.iter() {
         let entity = e.0;
@@ -158,13 +159,16 @@ pub fn system(
 
                 let rad = gate_generic.ball_radius;
                 let balltype = gate_generic.remain.pop().unwrap();
+
                 match(balltype) {
                     BallType::Zundamon => {
-                        cmp_ball::add(&mut commands, &game_assets, Vec2::new(x, y), rad, Vec2::new(0.0, 0.0));
+                        let _ = commands.spawn(
+                            cmp_ball::BallBundle::from((Vec2::new(x, y), rad, Vec2::ZERO, game_assets)));
                     },
 
                     BallType::Zombie => {
-                        cmp_ball_zombie::add(&mut commands, &game_assets, Vec2::new(x, y), rad, Vec2::new(0.0, 0.0));
+                        let _ = commands.spawn(
+                            cmp_ball_zombie::BallZombieBundle::from((Vec2::new(x, y), rad, Vec2::ZERO, game_assets)));
                     }
                 }
             }

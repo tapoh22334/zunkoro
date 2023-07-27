@@ -1,3 +1,4 @@
+use bevy::input::gamepad;
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use rand::prelude::*;
@@ -43,6 +44,7 @@ pub fn system(
     mut query: Query<(Entity, &Transform, &BBSize, &mut GateZundamon)>,
 ) {
     let mut rng = rand::thread_rng();
+    let game_assets = game_assets.into_inner();
 
     for (entity, transform, bbsize, mut gate_zundamon) in query.iter_mut() {
         if gate_zundamon.remain > 0 {
@@ -54,7 +56,8 @@ pub fn system(
                 let x = rng.gen_range(pos_min.x .. pos_max.x);
                 let y = rng.gen_range(pos_min.y .. pos_max.y);
 
-                cmp_ball::add(&mut commands, &game_assets, Vec2::new(x, y), BALL_SIZE, Vec2::new(0.0, 0.0));
+                let entity = commands.spawn(
+                    cmp_ball::BallBundle::from((Vec2::new(x, y), BALL_SIZE, Vec2::ZERO, game_assets)));
                 gate_zundamon.remain -= 1;
             }
         } else {
