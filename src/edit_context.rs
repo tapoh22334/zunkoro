@@ -10,6 +10,7 @@ pub enum EditTool { #[default] Select,
                 Rotate,
                 Scale,
                 ScaleDistort,
+                Custom1,
                 }
 
 #[derive(Component, Resource, Reflect, FromReflect, Clone, PartialEq, Debug, Default, InspectorOptions)]
@@ -39,13 +40,13 @@ pub enum MapObject {
 #[derive(Resource, Reflect, Clone, PartialEq, Debug, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
 pub enum EditContext {
-    Edit(Vec<Entity>, EditTool),
+    Edit(MapObject, Vec<Entity>, EditTool),
     Spawn(MapObject)
 }
 
 impl Default for EditContext {
     fn default() -> Self {
-        EditContext::Edit(vec![], EditTool::default())
+        EditContext::Edit(MapObject::None, vec![], EditTool::default())
     }
 }
 

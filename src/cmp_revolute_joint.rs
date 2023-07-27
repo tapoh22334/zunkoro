@@ -28,9 +28,11 @@ pub fn handle_user_input(
                 let entity = add(&mut commands,
                                  &mut rigid_body,
                                  RevoluteJoint { child_entity: entity, translation: transform.translation, limits: [0.0, 0.0] });
+
+                commands.entity(entity).insert(MapObject::RevoluteJoint(vec![]));
             }
 
-            *edit_context = EditContext::Edit(entities, EditTool::Select);
+            *edit_context = EditContext::Edit(MapObject::RevoluteJoint(vec![]), entities, EditTool::Select);
         }
     }
 }

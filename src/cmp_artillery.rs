@@ -89,16 +89,6 @@ impl From<&GameAsset> for ArtilleryBarrelBundle {
     }
 }
 
-impl From<(Vec3, &GameAsset)> for ArtilleryBarrelBundle {
-    fn from(tuple: (Vec3, &GameAsset)) -> Self {
-        let (scale, game_assets) = tuple;
-
-        let mut bundle = ArtilleryBarrelBundle::from(game_assets);
-        bundle.sprite_bundle.transform.scale = scale;
-
-        bundle
-    }
-}
 
 pub fn add(commands: &mut Commands,
             game_assets: &Res<GameAsset>,
@@ -152,43 +142,75 @@ pub fn add(commands: &mut Commands,
     return entity.id();
 }
 
+fn quantize_angle(angle: f32, num_steps: u8) -> f32 {
+    let step_size = 2.0 * std::f32::consts::PI / num_steps as f32;
+    let half_step = step_size / 2.0;
+    let normalized_angle = (angle + half_step + 2.0 * std::f32::consts::PI) % (2.0 * std::f32::consts::PI);
+    (normalized_angle / step_size).round() * step_size
+}
+
 use crate::edit_context::*;
 pub fn handle_user_input(
     mut commands: Commands,
+    keys: Res<Input<KeyCode>>,
     buttons: Res<Input<MouseButton>>,
     game_assets: Res<GameAsset>,
     mut edit_context: ResMut<EditContext>,
     world_position: ResMut<WorldPosition>,
+    mut artillery_frag1: Query<(&Children, &Transform, &mut Artillery)>,
+    mut artillery_frag2: Query<&mut Transform, (With<Barrel>, Without<Artillery>)>,
     ) {
-    if ! buttons.just_pressed(MouseButton::Left) {
-        return;
-    }
-
-    if let EditContext::Spawn(map_object) = edit_context.clone() {
-        if let MapObject::Artillery = map_object {
-            if buttons.just_pressed(MouseButton::Left) {
-                let artillery = Artillery {
-                    angvel: 0.1,
-                    angle: 0.0,
-                    angle_range: (-0.25 * std::f32::consts::PI, 0.25 * std::f32::consts::PI)
-                };
-                let game_assets = game_assets.into_inner();
-                let mut entity = commands.spawn(ArtilleryBaseBundle::from((
+    if buttons.just_pressed(MouseButton::Left) {
+        if let EditContext::Spawn(map_object) = edit_context.clone() {
+            if let MapObject::Artillery = map_object {
+                if buttons.just_pressed(MouseButton::Left) {
+                    let artillery = Artillery {
+                        angvel: 0.1,
+                        angle: 0.0,
+                        angle_range: (-0.25 * std::f32::consts::PI, 0.25 * std::f32::consts::PI)
+                    };
+                    let game_assets = game_assets.into_inner();
+                    let mut entity = commands.spawn(ArtilleryBaseBundle::from((
                                 Vec3::from((world_position.translation, 0.0)),
                                 Vec3::ONE,
                                 artillery,
                                 game_assets,
-                            )));
-                entity.with_children(|children| {
-                    children.spawn(ArtilleryBarrelBundle::from((
-                                Vec3::ONE,
-                                game_assets,
                                 )));
-                });
-                *edit_context = EditContext::Edit(vec![entity.id()], EditTool::Select);
+                    entity.with_children(|children| {
+                        children.spawn(ArtilleryBarrelBundle::from(game_assets));
+                    });
+                    entity.insert(MapObject::Artillery);
+                    *edit_context = EditContext::Edit(MapObject::Artillery, vec![entity.id()], EditTool::Select);
+                }
             }
         }
     }
+
+    else if let EditContext::Edit(MapObject::Artillery, entities, EditTool::Select) = edit_context.clone() {
+        if keys.pressed(KeyCode::Key1) {
+            *edit_context = EditContext::Edit(MapObject::Artillery, entities, EditTool::Custom1);
+        }
+    }
+
+    else if let EditContext::Edit(MapObject::Artillery, entities, EditTool::Custom1) = edit_context.clone() {
+        let entity = entities[0];
+        if let Ok((children, base_transform, mut artillery)) = artillery_frag1.get_mut(entity) {
+            let mut barrel_transform = artillery_frag2.get_mut(*children.iter().next().unwrap()).unwrap();
+
+            let pos = base_transform.translation.truncate();
+            let dir = (world_position.translation - pos).normalize();
+            let angle = Vec2::new(1.0, 0.0).angle_between(dir);
+            let angle = quantize_angle(angle, 8);
+
+            barrel_transform.rotation = Quat::from_rotation_z(angle);
+            artillery.angle = angle;
+
+            let range = 0.25 * std::f32::consts::PI;
+            artillery.angle_range = (angle - range, angle + range)
+        }
+    }
+
+
 }
 
 pub fn system(
@@ -245,14 +267,16 @@ pub fn load(
 
         let json_str = std::fs::read_to_string(dir + FILE_NAME);
         if let Ok(json_str) = json_str {
-            let elem_list: Vec<(u32, Vec3, Quat, Vec3, Artillery)> = serde_json::from_str(&json_str).unwrap();
+            let elem_list: Vec<(u32, u32, Vec3, Quat, Vec3, Artillery)> = serde_json::from_str(&json_str).unwrap();
 
-            for (i, t, r, s, a) in elem_list {
-                let mut entity = commands.get_or_spawn(Entity::from_raw(i));
-                entity.insert(ArtilleryBaseBundle::from((t, s, a, game_assets)));
-                entity.with_children(|children| {
-                    children.spawn(ArtilleryBarrelBundle::from(( s, game_assets )));
-                });
+            for (i, i2, t, r, s, a) in elem_list {
+                let entity2 = commands.get_or_spawn(Entity::from_raw(i2))
+                                    .insert(ArtilleryBarrelBundle::from( game_assets )).id();
+
+                let entity = commands.get_or_spawn(Entity::from_raw(i))
+                                    .insert(ArtilleryBaseBundle::from((t, s, a, game_assets)))
+                                    .push_children(&[entity2]);
+
             }
         }
     }
@@ -260,13 +284,16 @@ pub fn load(
 
 use crate::ev_save_load_world::SaveWorldEvent;
 pub fn save(mut save_world_er: EventReader<SaveWorldEvent>,
-              artillery_q: Query<(Entity, &Transform, &Artillery)>) {
+              artillery_q: Query<(Entity, &Children, &Transform, &Artillery)>,
+              barrel_q: Query<Entity, With<Barrel>>,
+              ) {
     for e in save_world_er.iter() {
         let dir = e.0.clone();
-        let mut artillery_list: Vec<(u32, Vec3, Quat, Vec3, Artillery)> = vec![];
+        let mut artillery_list: Vec<(u32, u32, Vec3, Quat, Vec3, Artillery)> = vec![];
 
-        for (e, t, a) in artillery_q.iter() {
-            artillery_list.push((e.index(), t.translation, t.rotation, t.scale, a.clone()));
+        for (e, c, t, a) in artillery_q.iter() {
+            let barrel = barrel_q.get(*c.iter().next().unwrap()).unwrap();
+            artillery_list.push((e.index(), barrel.index(), t.translation, t.rotation, t.scale, a.clone()));
         }
 
         std::fs::write(dir + FILE_NAME, serde_json::to_string(&artillery_list).unwrap()).unwrap();

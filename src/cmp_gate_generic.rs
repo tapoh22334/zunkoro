@@ -107,17 +107,18 @@ pub fn handle_user_input(
     if let EditContext::Spawn(map_object) = edit_context.clone() {
         if let MapObject::GateGeneric = map_object {
 
-            let entity = commands.spawn(
+            let mut entity = commands.spawn(
                 GateGenericBundle::from(Vec3::from((world_position.translation, 0.0)))
                 );
 
-            *edit_context = EditContext::Edit(vec![entity.id()], EditTool::Select);
+            entity.insert(MapObject::GateGeneric);
+            *edit_context = EditContext::Edit(MapObject::GateGeneric, vec![entity.id()], EditTool::Select);
         }
     }
 }
 
 pub fn system_setup(
-    mut query: Query<&mut Sprite>,
+    mut query: Query<&mut Sprite, With<GateGeneric>>,
     ) {
 
     for mut sprite in query.iter_mut() {

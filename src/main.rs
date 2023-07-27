@@ -133,7 +133,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         //.add_plugin(bevy_framepace::FramepacePlugin)
         //.add_system(set_framerate.on_startup())
         .insert_resource(GameAsset::default())
-        .insert_resource(edit_context::EditContext::Edit(vec![], edit_context::EditTool::Select))
+        .insert_resource(edit_context::EditContext::Edit(MapObject::None, vec![], edit_context::EditTool::Select))
         .insert_resource(EguiWindowClicked(false))
         //.add_plugin(WorldInspectorPlugin::new())
         .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
@@ -449,7 +449,7 @@ fn handle_user_input(
     mut edit_context: ResMut<EditContext>,
     windows_q: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    mut transform_q: Query<(Entity, &mut Transform, &mut BBSize)>,
+    mut query: Query<(Entity, &mut Transform, &mut BBSize, &MapObject)>,
     mut window_clicked: ResMut<EguiWindowClicked>,
     ) {
 
@@ -472,13 +472,13 @@ fn handle_user_input(
         .map(|ray| ray.origin.truncate())
     {
         match edit_context.clone() {
-            EditContext::Edit(pick, edit_tool) => {
+            EditContext::Edit(map_object, pick, edit_tool) => {
                 if buttons.just_pressed(MouseButton::Left) 
                     && (pick.len() == 0 || keys.pressed(KeyCode::LShift)) {
                     let mut min_area = std::f32::MAX;
                     let mut selected_entity = None;
 
-                    for (entity, transform, size) in transform_q.iter() {
+                    for (entity, transform, size, map_object) in query.iter() {
                         let sized_width = size.x * transform.scale.x;
                         let sized_height = size.y * transform.scale.y;
                         let area = sized_width * sized_height;
@@ -490,7 +490,7 @@ fn handle_user_input(
                             println!("clicked {:?}", entity);
 
                             if area < min_area {
-                                selected_entity = Some(entity);
+                                selected_entity = Some((entity, map_object));
                                 min_area = area;
                             }
                         } 
@@ -499,38 +499,38 @@ fn handle_user_input(
                     if selected_entity.is_some() {
                         if keys.pressed(KeyCode::LShift) {
                             let mut new_pick = pick.clone();
-                            new_pick.push(selected_entity.unwrap());
-                            *edit_context = EditContext::Edit(new_pick, EditTool::Select);
+                            new_pick.push(selected_entity.unwrap().0);
+                            *edit_context = EditContext::Edit(MapObject::None, new_pick, EditTool::Select);
                         } else {
-                            *edit_context = EditContext::Edit(vec![selected_entity.unwrap()], EditTool::Select);
+                            *edit_context = EditContext::Edit(selected_entity.unwrap().1.clone(), vec![selected_entity.unwrap().0], EditTool::Select);
                         }
                     }
                 }
 
-                if buttons.just_released(MouseButton::Left) {
+                else if buttons.just_released(MouseButton::Left) {
                     if edit_tool != EditTool::Select {
-                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Select);
+                        *edit_context = EditContext::Edit(map_object, pick.clone(), EditTool::Select);
                     }
                 }
 
-                if pick.len() > 0 {
+                else if pick.len() > 0 {
                     if keys.pressed(KeyCode::Escape) { 
-                        *edit_context = EditContext::Edit(vec![], EditTool::Select);
+                        *edit_context = EditContext::Edit(MapObject::None, vec![], EditTool::Select);
                     } else if keys.pressed(KeyCode::Q) {
-                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Select);
+                        *edit_context = EditContext::Edit(map_object, pick.clone(), EditTool::Select);
                     } else if keys.pressed(KeyCode::T) {
-                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Translate);
+                        *edit_context = EditContext::Edit(map_object, pick.clone(), EditTool::Translate);
                     } else if keys.pressed(KeyCode::R) {
-                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Rotate);
+                        *edit_context = EditContext::Edit(map_object, pick.clone(), EditTool::Rotate);
                     } else if keys.pressed(KeyCode::S) {
-                        *edit_context = EditContext::Edit(pick.clone(), EditTool::Scale);
+                        *edit_context = EditContext::Edit(map_object, pick.clone(), EditTool::Scale);
                     } else if edit_tool == EditTool::Scale && keys.pressed(KeyCode::D) {
-                        *edit_context = EditContext::Edit(pick.clone(), EditTool::ScaleDistort);
+                        *edit_context = EditContext::Edit(map_object, pick.clone(), EditTool::ScaleDistort);
                     } else if keys.pressed(KeyCode::Delete) {
                         for e in pick.clone() {
                             commands.entity(e).despawn();
                         }
-                        *edit_context = EditContext::Edit(vec![], EditTool::Select);
+                        *edit_context = EditContext::Edit(MapObject::None, vec![], EditTool::Select);
                     }
                 }
 
@@ -539,7 +539,7 @@ fn handle_user_input(
                         if pick.len() > 0 {
                             let entity = pick[0];
                             let round_off = |x: f32| -> f32 { (x / 10.0).round() * 10.0 };
-                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _, _)) = query.get_mut(entity) {
                                 transform.translation.x = round_off(world_position.x);
                                 transform.translation.y = round_off(world_position.y);
                             }
@@ -549,7 +549,7 @@ fn handle_user_input(
                     EditTool::Rotate => {
                         if pick.len() > 0 {
                             let entity = pick[0];
-                            if let Ok((_, mut transform, _)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, _, _)) = query.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let dir = (world_position - pos).normalize();
                                 let angle = Vec2::new(0.0, 1.0).angle_between(dir);
@@ -561,7 +561,7 @@ fn handle_user_input(
                     EditTool::Scale => {
                         if pick.len() > 0 {
                             let entity = pick[0];
-                            if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, bbsize, _)) = query.get_mut(entity) {
                                 let pos = Vec2::new(transform.translation.x, transform.translation.y);
                                 let r = pos.distance(world_position);
                                 let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
@@ -575,7 +575,7 @@ fn handle_user_input(
                     EditTool::ScaleDistort => {
                         if pick.len() > 0 {
                             let entity = pick[0];
-                            if let Ok((_, mut transform, bbsize)) = transform_q.get_mut(entity) {
+                            if let Ok((_, mut transform, bbsize, _)) = query.get_mut(entity) {
                                 let pos = transform.translation.truncate();
                                 let diff = world_position - pos;
                                 let scale = diff / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
@@ -598,7 +598,8 @@ fn handle_user_input(
                                     position: world_position,
                                 };
                                 let entity = cmp_block_zombie::add(&mut commands, block_zombie);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                commands.entity(entity).insert(MapObject::BlockZombie);
+                                *edit_context = EditContext::Edit(MapObject::BlockZombie, vec![entity], EditTool::Select);
                             }
                         }
 
@@ -609,7 +610,8 @@ fn handle_user_input(
                                     position: world_position,
                                 };
                                 let entity = cmp_converter_body::add(&mut commands, cb);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                commands.entity(entity).insert(MapObject::ConverterBody);
+                                *edit_context = EditContext::Edit(MapObject::ConverterBody, vec![entity], EditTool::Select);
                             }
                         }
 
@@ -619,7 +621,8 @@ fn handle_user_input(
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
                                 let entity = cmp_gear::add_simple(&mut commands, &game_assets, &image_assets, gs);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                commands.entity(entity).insert(MapObject::GearSimple);
+                                *edit_context = EditContext::Edit(MapObject::GearSimple, vec![entity], EditTool::Select);
                             }
                         }
 
@@ -629,7 +632,8 @@ fn handle_user_input(
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
                                 let entity = cmp_gear::add_sorting(&mut commands, &game_assets, &image_assets, gs);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                commands.entity(entity).insert(MapObject::GearSorting);
+                                *edit_context = EditContext::Edit(MapObject::GearSorting, vec![entity], EditTool::Select);
                             }
                         }
 
@@ -639,7 +643,8 @@ fn handle_user_input(
                                     scale: 1.0, position: world_position, anglevel: -0.5
                                 };
                                 let entity = cmp_gear::add_swirl(&mut commands, &game_assets, &image_assets, gs);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                commands.entity(entity).insert(MapObject::GearSwirl);
+                                *edit_context = EditContext::Edit(MapObject::GearSwirl, vec![entity], EditTool::Select);
                             }
                         }
 
@@ -661,7 +666,8 @@ fn handle_user_input(
                                     };
 
                                     println!("GateTeleport entrance added {:?}", gtent);
-                                    let _ = cmp_gate_teleport::add_entrance(&mut commands, gtent);
+                                    let entity = cmp_gate_teleport::add_entrance(&mut commands, gtent);
+                                    commands.entity(entity).insert(MapObject::GateTeleport(ctx));
                                     *edit_context = EditContext::Spawn(MapObject::GateTeleport(Some((id, color))));
 
                                 } else {
@@ -675,7 +681,8 @@ fn handle_user_input(
 
                                     println!("GateTeleport exit added {:?}", gtext);
                                     let entity = cmp_gate_teleport::add_exit(&mut commands, gtext);
-                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                    commands.entity(entity).insert(MapObject::GateTeleport(None));
+                                    *edit_context = EditContext::Edit(MapObject::GateTeleport(None), vec![entity], EditTool::Select);
 
                                 }
                             }
@@ -691,7 +698,8 @@ fn handle_user_input(
                                     spawn_offset_sec: 15.0,
                                 };
                                 let entity = cmp_gate_zombie::add(&mut commands, gz);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                commands.entity(entity).insert(MapObject::GateZombie);
+                                *edit_context = EditContext::Edit(MapObject::GateZombie, vec![entity], EditTool::Select);
                             }
                         }
 
@@ -704,7 +712,8 @@ fn handle_user_input(
                                     prob: 0.5,
                                 };
                                 let entity = cmp_gate_zundamon::add(&mut commands, gz);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                commands.entity(entity).insert(MapObject::GateZundamon);
+                                *edit_context = EditContext::Edit(MapObject::GateZundamon, vec![entity], EditTool::Select);
                             }
                         }
 
@@ -726,7 +735,8 @@ fn handle_user_input(
                                     let entity = cmp_pad_velocity::add(&mut commands,
                                                                   &game_assets,
                                                                   pd);
-                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                    commands.entity(entity).insert(MapObject::PadVelocity(None));
+                                    *edit_context = EditContext::Edit(MapObject::PadVelocity(None), vec![entity], EditTool::Select);
                                 }
                             }
                         }
@@ -748,7 +758,8 @@ fn handle_user_input(
                                     let entity = cmp_pad_acceleration::add(&mut commands,
                                                                   &game_assets,
                                                                   pd);
-                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                    commands.entity(entity).insert(MapObject::PadAcceleration(None));
+                                    *edit_context = EditContext::Edit(MapObject::PadAcceleration(None), vec![entity], EditTool::Select);
                                }
                             }
                         }
@@ -762,8 +773,9 @@ fn handle_user_input(
                                     shape,
                                 };
                                 //let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
-                                let entity = commands.spawn(PrimitiveShapeBundle::from((t, r, s, primitive_shape))).id();
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                let mut entity = commands.spawn(PrimitiveShapeBundle::from((t, r, s, primitive_shape)));
+                                entity.insert(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SBox));
+                                *edit_context = EditContext::Edit(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SBox), vec![entity.id()], EditTool::Select);
                             }
                         }
 
@@ -787,6 +799,7 @@ fn handle_user_input(
 
                                 polyline.push(world_position);
                                 entities.push(entity);
+
                                 *edit_context = EditContext::Spawn(MapObject::Shredder(entities, polyline));
 
                             } else if buttons.just_pressed(MouseButton::Right) {
@@ -805,7 +818,8 @@ fn handle_user_input(
                                     let entity = cmp_shredder::add(&mut commands,
                                                                   &game_assets,
                                                                   shredder);
-                                    *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                    commands.entity(entity).insert(MapObject::Shredder(vec![], vec![]));
+                                    *edit_context = EditContext::Edit(MapObject::Shredder(vec![], vec![]), vec![entity], EditTool::Select);
                                 }
                             }
 
@@ -814,13 +828,13 @@ fn handle_user_input(
                         MapObject::Zundamon => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
+                                *edit_context = EditContext::Edit(MapObject::Zundamon, vec![entity], EditTool::Select);
                             }
                         }
 
                         MapObject::VibratingShape(entities) => {
                             for entity in entities.clone() {
-                                let (entity, transform, bbsize) = transform_q.get(entity).unwrap();
+                                let (entity, transform, bbsize, _) = query.get(entity).unwrap();
 
                                 let t = transform.translation.x;
                                 let distance = cmp_primitive_shape::DEFAULT_SIZE_X;
@@ -834,9 +848,10 @@ fn handle_user_input(
                                 //let entity = cmp_primitive_shape::add(&mut commands, primitive_shape);
                                 let entity = commands.entity(entity)
                                     .insert(vibrator).id();
+                                commands.entity(entity).insert(MapObject::VibratingShape(vec![]));
                             }
 
-                            *edit_context = EditContext::Edit(entities, EditTool::Select);
+                            *edit_context = EditContext::Edit(MapObject::VibratingShape(vec![]), entities, EditTool::Select);
                         }
 
 
@@ -847,9 +862,10 @@ fn handle_user_input(
                                 };
                                 let entity = commands.entity(entity)
                                     .insert(rotator).id();
+                                commands.entity(entity).insert(MapObject::RotatingShape(vec![]));
                             }
 
-                            *edit_context = EditContext::Edit(entities, EditTool::Select);
+                            *edit_context = EditContext::Edit(MapObject::RotatingShape(vec![]), entities, EditTool::Select);
                         }
 
 
@@ -872,14 +888,14 @@ fn debug_spawn (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("spawn");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(pick, edit_tool) = edit_mode.clone() {
+                if let EditContext::Edit(MapObject::None, pick, edit_tool) = edit_mode.clone() {
                     let entity = pick[0];
                     event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zundamon));
                     println!("send event");
                 }
             }
             if ui.button("o").clicked() {
-                if let EditContext::Edit(pick, edit_tool) = edit_mode.clone() {
+                if let EditContext::Edit(MapObject::None, pick, edit_tool) = edit_mode.clone() {
                     let entity = pick[0];
                     event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zombie));
                     println!("send event");
@@ -1040,7 +1056,7 @@ fn spawn_map_object (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Vibrator");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(entity_vec, edit_tool) = edit_mode.clone() {
+                if let EditContext::Edit(_, entity_vec, edit_tool) = edit_mode.clone() {
                     if entity_vec.len() > 0 {
                         new_edit_mode = Some(EditContext::Spawn(MapObject::VibratingShape(entity_vec)));
                     } else {
@@ -1055,7 +1071,7 @@ fn spawn_map_object (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Rotator");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(entity_vec, edit_tool) = edit_mode.clone() {
+                if let EditContext::Edit(_, entity_vec, edit_tool) = edit_mode.clone() {
                     if entity_vec.len() > 0 {
                         new_edit_mode = Some(EditContext::Spawn(MapObject::RotatingShape(entity_vec)));
                     } else {
@@ -1070,7 +1086,7 @@ fn spawn_map_object (
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("RevoluteJoint");
             if ui.button("o").clicked() {
-                if let EditContext::Edit(entity_vec, edit_tool) = edit_mode.clone() {
+                if let EditContext::Edit(_, entity_vec, edit_tool) = edit_mode.clone() {
                     if entity_vec.len() > 0 {
                         new_edit_mode = Some(EditContext::Spawn(MapObject::RevoluteJoint(entity_vec)));
                     } else {
