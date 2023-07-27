@@ -168,6 +168,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<Artillery>()
+        .add_system(cmp_artillery::handle_user_input)
         .add_system(cmp_artillery::load)
         .add_system(cmp_artillery::save)
         .add_system(cmp_artillery::system.in_set(OnUpdate(AppState::Game)))
@@ -590,20 +591,6 @@ fn handle_user_input(
 
             EditContext::Spawn(map_object) => {
                     match map_object {
-                        MapObject::Artillery => {
-                            if buttons.just_pressed(MouseButton::Left) {
-                                let artillery = Artillery {
-                                    scale: 1.0,
-                                    position: world_position,
-                                    angvel: 0.1,
-                                    angle: 0.0,
-                                    angle_range: (-0.25 * std::f32::consts::PI, 0.25 * std::f32::consts::PI)
-                                };
-                                let entity = cmp_artillery::add(&mut commands, &game_assets, artillery);
-                                *edit_context = EditContext::Edit(vec![entity], EditTool::Select);
-                            }
-                        }
-
                         MapObject::BlockZombie => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let block_zombie = BlockZombie {
