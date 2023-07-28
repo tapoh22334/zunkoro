@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball;
+use crate::cmp_ball_zundamon;
 
 const BALL_SIZE: f32 = 10.0;
 
@@ -57,7 +57,7 @@ pub fn system(
                 let y = rng.gen_range(pos_min.y .. pos_max.y);
 
                 let entity = commands.spawn(
-                    cmp_ball::BallBundle::from((Vec2::new(x, y), BALL_SIZE, Vec2::ZERO, game_assets)));
+                    cmp_ball_zundamon::BallZundamonBundle::from((Vec2::new(x, y), BALL_SIZE, Vec2::ZERO, game_assets)));
                 gate_zundamon.remain -= 1;
             }
         } else {

@@ -2,11 +2,11 @@ use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use rand::prelude::*;
 
-use crate::cmp_ball::Zundamon;
+use crate::cmp_ball_zundamon::Zundamon;
 use crate::cmp_ball_zombie::Zombie;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball;
+use crate::cmp_ball_zundamon;
 use crate::cmp_ball_zombie;
 
 use crate::edit_context::*;
@@ -163,7 +163,7 @@ pub fn system(
                 match(balltype) {
                     BallType::Zundamon => {
                         let _ = commands.spawn(
-                            cmp_ball::BallBundle::from((Vec2::new(x, y), rad, Vec2::ZERO, game_assets)));
+                            cmp_ball_zundamon::BallZundamonBundle::from((Vec2::new(x, y), rad, Vec2::ZERO, game_assets)));
                     },
 
                     BallType::Zombie => {

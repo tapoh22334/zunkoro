@@ -1,7 +1,9 @@
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
+
 use crate::cmp_bbsize::BBSize;
+use crate::cmp_ball_zundamon;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct BlockZombie {

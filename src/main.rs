@@ -21,6 +21,7 @@ mod cmp_bbsize;
 use crate::cmp_bbsize::BBSize;
 
 mod cmp_ball;
+mod cmp_ball_zundamon;
 mod cmp_ball_zombie;
 mod cmp_blood;
 
@@ -828,7 +829,7 @@ fn handle_user_input(
                         MapObject::Zundamon => {
                             if buttons.just_pressed(MouseButton::Left) {
                                 let entity = commands.spawn(
-                                    cmp_ball::BallBundle::from((world_position, 40.0, Vec2::ZERO, game_assets.into_inner()))).id();
+                                    cmp_ball_zundamon::BallZundamonBundle::from((world_position, 40.0, Vec2::ZERO, game_assets.into_inner()))).id();
                                 *edit_context = EditContext::Edit(MapObject::Zundamon, vec![entity], EditTool::Select);
                             }
                         }

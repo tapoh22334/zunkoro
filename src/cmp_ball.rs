@@ -20,21 +20,17 @@ pub struct Ball {
     pub previous_position: Option<Vec2>,
 }
 
-#[derive(Component)]
-pub struct Zundamon;
-
 #[derive(Bundle)]
 pub struct BallBundle {
-    ball: Ball,
-    zundamon: Zundamon,
-    rigid_body: RigidBody,
-    restitution: Restitution,
-    friction: Friction,
-    collider: Collider,
-    collision_groups: CollisionGroups,
-    velocity: Velocity,
+    pub ball: Ball,
+    pub rigid_body: RigidBody,
+    pub restitution: Restitution,
+    pub friction: Friction,
+    pub collider: Collider,
+    pub collision_groups: CollisionGroups,
+    pub velocity: Velocity,
     #[bundle]
-    sprite_bundle: SpriteBundle,
+    pub sprite_bundle: SpriteBundle,
 }
 
 
@@ -42,7 +38,6 @@ impl Default for BallBundle {
     fn default() -> Self {
         Self {
             ball: Ball { radius: DEFAULT_BALL_RADIUS, previous_position: None },
-            zundamon: Zundamon,
             rigid_body: RigidBody::Dynamic,
             restitution: Restitution::coefficient(DEFAULT_RESTITUTION),
             friction: Friction::coefficient(DEFAULT_FRICTION),
@@ -56,28 +51,17 @@ impl Default for BallBundle {
     }
 }
 
-fn random_sprite_handle(game_assets: &GameAsset) -> &Handle<Image> {
-    let mut rng = rand::thread_rng();
-    let image_vec = vec![ "zun1_handle", "zun2_handle", "zun3_handle" ];
-    let random_index = rng.gen_range(0..image_vec.len());
-    let random_image = image_vec[random_index];
-
-    game_assets.image_handles.get(random_image).unwrap()
-}
-
-impl From<(Vec2, f32, Vec2, &GameAsset)> for BallBundle {
-    fn from(tuple: (Vec2, f32, Vec2, &GameAsset)) -> Self {
+impl From<(Vec2, f32, Vec2, Handle<Image>)> for BallBundle {
+    fn from(tuple: (Vec2, f32, Vec2, Handle<Image>)) -> Self {
         let mut bundle = BallBundle::default();
-        let (translation, radius, velocity, game_assets) = tuple;
-
-        let sprite_handle = random_sprite_handle(&game_assets);
+        let (translation, radius, velocity, handle) = tuple;
 
         bundle.sprite_bundle = SpriteBundle {
             sprite: Sprite {
                 custom_size: Some(Vec2::ONE * (radius * 2.0)),
                 ..default()
             },
-            texture: sprite_handle.clone(),
+            texture: handle,
             transform: Transform {
                 translation: Vec3::from((translation, 1.0)),
                 ..default()
@@ -85,10 +69,29 @@ impl From<(Vec2, f32, Vec2, &GameAsset)> for BallBundle {
             ..default()
         };
 
+        bundle.collider = Collider::ball(radius);
+
         bundle
     }
 }
 
+
+pub fn system_trajectory(
+    mut commands: Commands,
+    mut q: Query<(&Transform, &mut Ball)>,
+) {
+    for (t, mut ball) in q.iter_mut() {
+        let curr_pos = t.translation.truncate();
+
+        if ball.previous_position.is_some() {
+            let prev_pos = ball.previous_position.unwrap();
+            let trajectory = Trajectory { line: (prev_pos, curr_pos), life_time: 0.6 };
+            cmp_trajectory::add(&mut commands, trajectory);
+        }
+
+        ball.previous_position = Some(curr_pos);
+    }
+}
 
 pub fn kill(commands: &mut Commands,
             audio: &Res<Audio>,
@@ -111,19 +114,3 @@ pub fn kill(commands: &mut Commands,
         audio.play(game_assets.audio_handles.get(random_audio).unwrap().clone());
 }
 
-pub fn system_trajectory(
-    mut commands: Commands,
-    mut q: Query<(&Transform, &mut Ball)>,
-) {
-    for (t, mut ball) in q.iter_mut() {
-        let curr_pos = t.translation.truncate();
-
-        if ball.previous_position.is_some() {
-            let prev_pos = ball.previous_position.unwrap();
-            let trajectory = Trajectory { line: (prev_pos, curr_pos), life_time: 0.6 };
-            cmp_trajectory::add(&mut commands, trajectory);
-        }
-
-        ball.previous_position = Some(curr_pos);
-    }
-}

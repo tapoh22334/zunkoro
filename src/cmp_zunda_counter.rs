@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::cmp_game_asset::GameAsset;
-use crate::cmp_ball::Zundamon;
+use crate::cmp_ball_zundamon::Zundamon;
 use crate::cmp_zundamon_fullbody::ZundamonFullbody;
 
 #[derive(Component)]
