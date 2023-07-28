@@ -84,7 +84,7 @@ impl From<(Quat, &GameAsset)> for ArtilleryBarrelBundle {
                 transform: Transform {
                     rotation,
                     scale: Vec3::ONE,
-                    ..Default::default()
+                    translation: Vec3::new(0.0, 0.0, 2.0),
                 },
                 ..default()
             },
@@ -122,7 +122,7 @@ pub fn handle_user_input(
                     };
                     let game_assets = game_assets.into_inner();
                     let mut entity = commands.spawn(ArtilleryBaseBundle::from((
-                                Vec3::from((world_position.translation, 0.0)),
+                                Vec3::from((world_position.translation, 2.0)),
                                 Vec3::ONE,
                                 artillery,
                                 game_assets,

@@ -92,7 +92,6 @@ pub fn system_infection(
     for (zundamon_e, zundamon_t, zundamon_v, zundamon_ball) in zundamon_q.iter() {
         for zombie_e in zombie_q.iter() {
             if let Some(_) = rapier_context.contact_pair(zundamon_e, zombie_e) {
-                //commands.entity(zundamon_e).despawn();
                 cmp_ball::kill(&mut commands, &audio, &game_assets, zundamon_e, &zundamon_t);
                 let _ = commands.spawn(
                     BallZombieBundle::from((zundamon_t.translation.truncate(), zundamon_ball.radius, zundamon_v.linvel, game_assets)));

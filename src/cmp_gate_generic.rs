@@ -12,8 +12,8 @@ use crate::cmp_ball_zombie;
 use crate::edit_context::*;
 
 const BALL_SIZE: f32 = 10.0;
-pub const DEFAULT_SIZE_X: f32 = 64.0;
-pub const DEFAULT_SIZE_Y: f32 = 64.0;
+pub const DEFAULT_SIZE_X: f32 = 10.0;
+pub const DEFAULT_SIZE_Y: f32 = 10.0;
 
 
 #[derive(Component, Reflect, FromReflect, Clone, Copy, Serialize, Deserialize, Debug)]

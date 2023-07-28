@@ -324,14 +324,14 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     commands.spawn((Camera2dBundle::default(), MainCamera));
 
     let image_mappings = [
-        (include_bytes!("../assets/zun1.png").as_slice(), "zun1_handle"),
-        (include_bytes!("../assets/zun2.png").as_slice(), "zun2_handle"),
-        (include_bytes!("../assets/zun3.png").as_slice(), "zun3_handle"),
-        (include_bytes!("../assets/zun1_full.png").as_slice(), "zun1_full_handle"),
-        (include_bytes!("../assets/zun2_full.png").as_slice(), "zun2_full_handle"),
-        (include_bytes!("../assets/zun3_full.png").as_slice(), "zun3_full_handle"),
-        (include_bytes!("../assets/zun4_full.png").as_slice(), "zun4_full_handle"),
-        (include_bytes!("../assets/zombie1.png").as_slice(), "zombie1_handle"),
+        (include_bytes!("../assets/map_element/zun1.png").as_slice(), "zun1_handle"),
+        (include_bytes!("../assets/map_element/zun2.png").as_slice(), "zun2_handle"),
+        (include_bytes!("../assets/map_element/zun3.png").as_slice(), "zun3_handle"),
+        (include_bytes!("../assets/map_element/zun1_full.png").as_slice(), "zun1_full_handle"),
+        (include_bytes!("../assets/map_element/zun2_full.png").as_slice(), "zun2_full_handle"),
+        (include_bytes!("../assets/map_element/zun3_full.png").as_slice(), "zun3_full_handle"),
+        (include_bytes!("../assets/map_element/zun4_full.png").as_slice(), "zun4_full_handle"),
+        (include_bytes!("../assets/map_element/zombie1.png").as_slice(), "zombie1_handle"),
         (include_bytes!("../assets/map.png").as_slice(), "map_handle"),
         (include_bytes!("../assets/map2.png").as_slice(), "map2_handle"),
         (include_bytes!("../assets/map3.png").as_slice(), "map3_handle"),
@@ -528,7 +528,7 @@ fn handle_user_input(
                         *edit_context = EditContext::Edit(map_object, pick.clone(), EditTool::ScaleDistort);
                     } else if keys.pressed(KeyCode::Delete) {
                         for e in pick.clone() {
-                            commands.entity(e).despawn();
+                            commands.entity(e).despawn_recursive();
                         }
                         *edit_context = EditContext::Edit(MapObject::None, vec![], EditTool::Select);
                     }

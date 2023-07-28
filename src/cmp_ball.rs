@@ -8,8 +8,11 @@ use crate::cmp_trajectory;
 use crate::cmp_blood;
 
 const DEFAULT_BALL_RADIUS: f32 = 19.0 / 2.0;
-const DEFAULT_RESTITUTION: f32 = 0.1;
-const DEFAULT_FRICTION: f32 = 0.011;
+//const DEFAULT_RESTITUTION: f32 = 0.1;
+//const DEFAULT_FRICTION: f32 = 0.011;
+
+const DEFAULT_RESTITUTION: f32 = 0.5;
+const DEFAULT_FRICTION: f32 = 0.5;
 
 #[derive(Component)]
 pub struct Ball {
