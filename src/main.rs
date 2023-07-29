@@ -25,6 +25,8 @@ mod cmp_ball;
 mod cmp_ball_type1;
 mod cmp_ball_type2;
 mod cmp_ball_type3;
+mod cmp_ball_type4;
+mod cmp_explosion;
 mod cmp_ball_zundamon;
 mod cmp_ball_zombie;
 mod cmp_blood;
@@ -178,6 +180,11 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         //.add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_type1::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_type2::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_type3::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_type4::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_explosion::system.in_set(OnUpdate(AppState::Game)))
         //.add_system(cmp_ball_zombie::system_infection.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
@@ -354,6 +361,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     commands.spawn((Camera2dBundle::default(), MainCamera));
 
     let image_mappings = [
+        (include_bytes!("../assets/map_element/bomb.png").as_slice(), "bomb_handle"),
         (include_bytes!("../assets/map_element/zun1.png").as_slice(), "zun1_handle"),
         (include_bytes!("../assets/map_element/zun2.png").as_slice(), "zun2_handle"),
         (include_bytes!("../assets/map_element/zun3.png").as_slice(), "zun3_handle"),
@@ -1054,6 +1062,18 @@ fn spawn_map_object (
                     }
                 }
             }
+
+            if ui.button("o").clicked() {
+                info!("Splitter Gate spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type4P1)]
+                                    )));
+                    }
+                }
+            }
         });
 
         ui.horizontal(|ui: &mut egui::Ui| {
@@ -1092,6 +1112,17 @@ fn spawn_map_object (
                         new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
                                                 vec![SpawnBall(entity_vec[0].index(), BallType::Zombie),
                                                     SpawnBall(entity_vec[1].index(), BallType::Type3P2)]
+                                    )));
+                    }
+                }
+            }
+
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zombie),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type4P2)]
                                     )));
                     }
                 }

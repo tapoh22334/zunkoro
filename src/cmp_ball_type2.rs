@@ -19,9 +19,13 @@ const HP: f32 = 1.0;
 const ATTACK: f32 = 2.0;
 const ANGVEL: f32 = -7.5;
 
+#[derive(Component)]
+pub struct BallType2;
+
 #[derive(Bundle)]
 pub struct BallType2P1Bundle {
     player1: Player1,
+    ball_type: BallType2,
     status: Status,
     rotator: Rotator,
     #[bundle]
@@ -36,6 +40,7 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType2P1Bundle {
         let handle = game_assets.image_handles.get("zun1_handle").unwrap();
         let bundle = Self {
             player1: Player1,
+            ball_type: BallType2,
             status: Status {
                 hp: HP,
                 attack: ATTACK,
@@ -52,6 +57,7 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType2P1Bundle {
 #[derive(Bundle)]
 pub struct BallType2P2Bundle {
     player2: Player2,
+    ball_type: BallType2,
     status: Status,
     rotator: Rotator,
     #[bundle]
@@ -66,6 +72,7 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType2P2Bundle {
         let handle = game_assets.image_handles.get("zombie1_handle").unwrap();
         let bundle = Self {
             player2: Player2,
+            ball_type: BallType2,
             status: Status {
                 hp: HP,
                 attack: ATTACK,
@@ -79,3 +86,15 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType2P2Bundle {
 }
 
 
+pub fn system(
+    mut commands: Commands,
+    audio: Res<Audio>,
+    game_assets: Res<GameAsset>,
+    mut query: Query<(Entity, &Status, &Transform, &BallType2), Or<(With<Player1>, With<Player2>)>>,
+) {
+    for (e, s, t, ball) in query.iter() {
+        if s.hp <= 0.0 {
+            cmp_ball::kill(&mut commands, &audio, &game_assets, e, &t);
+        }
+    }
+}

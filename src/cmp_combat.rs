@@ -65,19 +65,8 @@ pub fn system(
 
                     cmp_blood::add(&mut commands, p1_t.translation.truncate(), p1_damage as usize);
                     cmp_blood::add(&mut commands, p2_t.translation.truncate(), p2_damage as usize);
-
-                    if p1_ball_opt.is_some() && p1_c.hp <= 0.0 {
-                        cmp_ball::kill(&mut commands, &audio, &game_assets, p1_e, &p1_t);
-                    }
-
-                    if p2_ball_opt.is_some() && p2_c.hp <= 0.0 {
-                        cmp_ball::kill(&mut commands, &audio, &game_assets, p2_e, &p2_t);
-                    }
-
-                    display_contact_info(p1_e, p2_e, &rapier_context);
                 }
             }
         }
     }
 }
-

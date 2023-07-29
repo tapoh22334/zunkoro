@@ -13,6 +13,7 @@ use crate::cmp_ball_zombie;
 use crate::cmp_ball_type1;
 use crate::cmp_ball_type2;
 use crate::cmp_ball_type3;
+use crate::cmp_ball_type4;
 
 use crate::cmp_rotator::Rotator;
 use crate::edit_context::*;
@@ -32,6 +33,8 @@ pub enum BallType {
     Type2P2,
     Type3P1,
     Type3P2,
+    Type4P1,
+    Type4P2,
 }
 
 #[derive(Reflect, FromReflect, Clone, PartialEq, Serialize, Deserialize,Debug)]
@@ -210,6 +213,16 @@ pub fn system(
                     BallType::Type3P2 => {
                         let _ = commands.spawn(
                             cmp_ball_type3::BallType3P2Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
+                    }
+
+                    BallType::Type4P1 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type4::BallType4P1Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
+                    },
+
+                    BallType::Type4P2 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type4::BallType4P2Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
                     }
                 }
             }
