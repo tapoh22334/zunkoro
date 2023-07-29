@@ -1,3 +1,4 @@
+use bevy::ecs::system::Spawn;
 //#![windows_subsystem = "windows"]
 use rand::prelude::*;
 
@@ -21,12 +22,17 @@ mod cmp_bbsize;
 use crate::cmp_bbsize::BBSize;
 
 mod cmp_ball;
+mod cmp_ball_type1;
+mod cmp_ball_type2;
+mod cmp_ball_type3;
 mod cmp_ball_zundamon;
 mod cmp_ball_zombie;
 mod cmp_blood;
 
 mod cmp_block_zombie;
 use crate::cmp_block_zombie::BlockZombie;
+
+mod cmp_combat;
 
 mod cmp_converter_body;
 use crate::cmp_converter_body::ConverterBody;
@@ -39,6 +45,10 @@ use crate::cmp_gate_generic::SpawnBall;
 use crate::cmp_gate_generic::BallType;
 use crate::cmp_gate_generic::GateGeneric;
 use crate::cmp_gate_generic::GateGenericBundle;
+
+mod cmp_gate_splitter;
+use crate::cmp_gate_splitter::GateSplitter;
+use crate::cmp_gate_splitter::GateSplitterBundle;
 
 mod cmp_gate_teleport;
 use crate::cmp_gate_teleport::GateTeleportExit;
@@ -81,6 +91,10 @@ use crate::cmp_rotator::Rotator;
 
 mod cmp_shredder;
 use crate::cmp_shredder::Shredder;
+
+mod cmp_spawn_timer;
+use crate::cmp_spawn_timer::SpawnTimer;
+use crate::cmp_spawn_timer::SpawnTimerBundle;
 
 mod cmp_vibrator;
 use crate::cmp_vibrator::Vibrator;
@@ -136,7 +150,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .insert_resource(GameAsset::default())
         .insert_resource(edit_context::EditContext::Edit(MapObject::None, vec![], edit_context::EditTool::Select))
         .insert_resource(EguiWindowClicked(false))
-        //.add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
@@ -164,7 +178,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         //.add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
-        .add_system(cmp_ball_zombie::system_infection.in_set(OnUpdate(AppState::Game)))
+        //.add_system(cmp_ball_zombie::system_infection.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
 
@@ -178,6 +192,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .register_type::<BlockZombie>()
         .add_system(cmp_block_zombie::load)
         .add_system(cmp_block_zombie::save)
+
+        .add_system(cmp_combat::system)
 
         .register_type::<ConverterBody>()
         .add_system(cmp_converter_body::load)
@@ -193,6 +209,12 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_gate_generic::save)
         .add_system(cmp_gate_generic::system_setup.in_schedule(OnEnter(AppState::Game)))
         .add_system(cmp_gate_generic::system)
+
+        .register_type::<GateSplitter>()
+        .add_system(cmp_gate_splitter::handle_user_input)
+        .add_system(cmp_gate_splitter::load)
+        .add_system(cmp_gate_splitter::save)
+        .add_system(cmp_gate_splitter::system)
 
         .register_type::<GateTeleportExit>()
         .register_type::<GateTeleportEntrance>()
@@ -250,6 +272,13 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_shredder::save)
         .add_system(cmp_shredder::system_move.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_shredder::system_kill.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<SpawnTimer>()
+        .add_system(cmp_spawn_timer::handle_user_input)
+        .add_system(cmp_spawn_timer::load)
+        .add_system(cmp_spawn_timer::save)
+        .add_system(cmp_spawn_timer::system_setup.in_schedule(OnEnter(AppState::Game)))
+        .add_system(cmp_spawn_timer::system.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<Trajectory>()
         .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))
@@ -892,17 +921,32 @@ fn debug_spawn (
             if ui.button("o").clicked() {
                 if let EditContext::Edit(MapObject::GateGeneric, pick, edit_tool) = edit_mode.clone() {
                     let entity = pick[0];
-                    event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zundamon));
+                    event.send(cmp_gate_generic::SpawnBall (entity.index(), cmp_gate_generic::BallType::Zundamon));
                     println!("send event");
                 }
             }
             if ui.button("o").clicked() {
                 if let EditContext::Edit(MapObject::GateGeneric, pick, edit_tool) = edit_mode.clone() {
                     let entity = pick[0];
-                    event.send(cmp_gate_generic::SpawnBall (entity, cmp_gate_generic::BallType::Zombie));
+                    event.send(cmp_gate_generic::SpawnBall (entity.index(), cmp_gate_generic::BallType::Zombie));
                     println!("send event");
                 }
             }
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(MapObject::GateGeneric, pick, edit_tool) = edit_mode.clone() {
+                    let entity = pick[0];
+                    event.send(cmp_gate_generic::SpawnBall (entity.index(), cmp_gate_generic::BallType::Type1P1));
+                    println!("send event");
+                }
+            }
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(MapObject::GateGeneric, pick, edit_tool) = edit_mode.clone() {
+                    let entity = pick[0];
+                    event.send(cmp_gate_generic::SpawnBall (entity.index(), cmp_gate_generic::BallType::Type1P2));
+                    println!("send event");
+                }
+            }
+
         });
     });
 }
@@ -969,6 +1013,88 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Generic Gate spawn start");
                 new_edit_mode = Some(EditContext::Spawn(MapObject::GateGeneric));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Splitter Gate Left");
+            if ui.button("o").clicked() {
+                info!("Splitter Gate spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type1P1)]
+                                    )));
+                    }
+                }
+            }
+
+            if ui.button("o").clicked() {
+                info!("Splitter Gate spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        let mut v = vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon)];
+                        for i in 0..10 {
+                            v.push(SpawnBall(entity_vec[1].index(), BallType::Type2P1));
+                        }
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(v)));
+                    }
+                }
+            }
+
+            if ui.button("o").clicked() {
+                info!("Splitter Gate spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type3P1)]
+                                    )));
+                    }
+                }
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Splitter Gate Right");
+            if ui.button("o").clicked() {
+                info!("Splitter Gate spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zombie), 
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type1P2)]
+                                    )));
+                    } else {
+                        info!("no entity selected");
+                    }
+                } else {
+                    info!("target not selected");
+                }
+            }
+
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        let mut v = vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon)];
+                        for i in 0..10 {
+                            v.push(SpawnBall(entity_vec[1].index(), BallType::Type2P2));
+                        }
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(v)));
+                    }
+                }
+            }
+
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zombie),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type3P2)]
+                                    )));
+                    }
+                }
             }
         });
 
@@ -1044,6 +1170,38 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Shredder spawned");
                 new_edit_mode = Some(EditContext::Spawn(MapObject::Shredder(Vec::new(), Vec::new())));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Spawn Timer");
+            if ui.button("o").clicked() {
+                info!("Spawn Timer spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 1 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::SpawnTimer(
+                                    vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon)]
+                                    )));
+                    } else {
+                        info!("invalid number of selection");
+                    }
+                } else {
+                    info!("target not selected");
+                }
+            }
+            if ui.button("o").clicked() {
+                info!("Spawn Timer spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 1 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::SpawnTimer(
+                                    vec![SpawnBall(entity_vec[0].index(), BallType::Zombie)]
+                                    )));
+                    } else {
+                        info!("invalid number of selection");
+                    }
+                } else {
+                    info!("target not selected");
+                }
             }
         });
 

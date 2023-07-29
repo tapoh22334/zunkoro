@@ -30,7 +30,7 @@ pub struct BallBundle {
     pub collision_groups: CollisionGroups,
     pub velocity: Velocity,
     #[bundle]
-    pub sprite_bundle: SpriteBundle,
+    sprite_bundle: SpriteBundle,
 }
 
 
@@ -109,7 +109,7 @@ pub fn kill(commands: &mut Commands,
                         "zundamon_die7_handle",
                      ];
         let random_audio = sv[rng.gen_range(0..sv.len())];
-        cmp_blood::add(commands, trans.translation.truncate());
+        cmp_blood::add(commands, trans.translation.truncate(), 8);
         commands.entity(entity).despawn();
         audio.play(game_assets.audio_handles.get(random_audio).unwrap().clone());
 }

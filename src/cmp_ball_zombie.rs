@@ -9,10 +9,6 @@ use crate::cmp_ball_zundamon;
 use crate::cmp_ball_zundamon::Zundamon;
 use crate::cmp_game_asset::GameAsset;
 
-const DEFAULT_BALL_RADIUS: f32 = 19.0 / 2.0;
-const DEFAULT_RESTITUTION: f32 = 0.1;
-const DEFAULT_FRICTION: f32 = 0.010;
-
 #[derive(Component)]
 pub struct Zombie;
 
@@ -61,7 +57,7 @@ pub fn system_infection(
     for (zundamon_e, zundamon_t, zundamon_v, zundamon_ball) in zundamon_q.iter() {
         for zombie_e in zombie_q.iter() {
             if let Some(_) = rapier_context.contact_pair(zundamon_e, zombie_e) {
-                cmp_ball_zundamon::kill(&mut commands, &audio, &game_assets, zundamon_e, &zundamon_t);
+                cmp_ball::kill(&mut commands, &audio, &game_assets, zundamon_e, &zundamon_t);
                 let _ = commands.spawn(
                     BallZombieBundle::from((zundamon_t.translation.truncate(), zundamon_ball.radius, zundamon_v.linvel, game_assets)));
             }

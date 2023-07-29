@@ -8,9 +8,9 @@ pub struct Rotator {
 }
 
 pub fn system(
-    mut q: Query<(&mut Transform, &mut Velocity, &Rotator)>,
+    mut q: Query<(&mut Velocity, &Rotator)>,
 ) {
-    for (t, mut v, r) in q.iter_mut() {
+    for (mut v, r) in q.iter_mut() {
         v.angvel = r.angvel;
     }
 }

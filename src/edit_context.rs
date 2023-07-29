@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 
 use crate::cmp_primitive_shape;
+use crate::cmp_gate_generic;
 
 #[derive(Resource, Reflect, FromReflect, Clone, Copy, PartialEq, Debug, Default, InspectorOptions)]
 #[reflect(Resource, InspectorOptions)]
@@ -24,6 +25,7 @@ pub enum MapObject {
     GearSorting,
     GearSwirl,
     GateGeneric,
+    GateSplitter(Vec<cmp_gate_generic::SpawnBall>),
     GateTeleport(Option<(u32, Color)>),
     GateZombie,
     GateZundamon,
@@ -32,6 +34,7 @@ pub enum MapObject {
     PolygonalShape,
     PrimitiveShape(cmp_primitive_shape::Shape),
     Shredder(Vec<Entity>, Vec<Vec2>),
+    SpawnTimer(Vec<cmp_gate_generic::SpawnBall>),
     VibratingShape(Vec<Entity>),
     RotatingShape(Vec<Entity>),
     RevoluteJoint(Vec<Entity>),

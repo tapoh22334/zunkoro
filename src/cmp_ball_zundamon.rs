@@ -46,24 +46,3 @@ impl From<(Vec2, f32, Vec2, &GameAsset)> for BallZundamonBundle {
 }
 
 
-pub fn kill(commands: &mut Commands,
-            audio: &Res<Audio>,
-            game_assets: &GameAsset,
-            entity: Entity,
-            trans: &Transform,
-            ) {
-        let mut rng = rand::thread_rng();
-        let sv = vec![ "zundamon_die1_handle",
-                        "zundamon_die2_handle",
-                        "zundamon_die3_handle",
-                        "zundamon_die4_handle",
-                        "zundamon_die5_handle",
-                        "zundamon_die6_handle",
-                        "zundamon_die7_handle",
-                     ];
-        let random_audio = sv[rng.gen_range(0..sv.len())];
-        cmp_blood::add(commands, trans.translation.truncate());
-        commands.entity(entity).despawn();
-        audio.play(game_assets.audio_handles.get(random_audio).unwrap().clone());
-}
-

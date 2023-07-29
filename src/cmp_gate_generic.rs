@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
+use bevy_rapier2d::prelude::*;
 use rand::prelude::*;
 
 use crate::cmp_ball_zundamon::Zundamon;
@@ -9,6 +10,11 @@ use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball_zundamon;
 use crate::cmp_ball_zombie;
 
+use crate::cmp_ball_type1;
+use crate::cmp_ball_type2;
+use crate::cmp_ball_type3;
+
+use crate::cmp_rotator::Rotator;
 use crate::edit_context::*;
 
 const BALL_SIZE: f32 = 10.0;
@@ -16,13 +22,20 @@ pub const DEFAULT_SIZE_X: f32 = 10.0;
 pub const DEFAULT_SIZE_Y: f32 = 10.0;
 
 
-#[derive(Component, Reflect, FromReflect, Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Component, Reflect, FromReflect, Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
 pub enum BallType {
     Zundamon,
     Zombie,
+    Type1P1,
+    Type1P2,
+    Type2P1,
+    Type2P2,
+    Type3P1,
+    Type3P2,
 }
 
-pub struct SpawnBall(pub Entity, pub BallType);
+#[derive(Reflect, FromReflect, Clone, PartialEq, Serialize, Deserialize,Debug)]
+pub struct SpawnBall(pub u32, pub BallType);
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct GateGeneric {
@@ -38,6 +51,7 @@ pub struct GateGenericBundle {
     sprite_bundle: SpriteBundle,
     bbsize: BBSize,
     gate_generic: GateGeneric,
+    map_object: MapObject,
 }
 
 
@@ -58,8 +72,8 @@ impl Default for GateGenericBundle {
                 remain: vec![],
                 prob: 1.0,
                 ball_radius: BALL_SIZE,
-            }
-
+            },
+            map_object: MapObject::GateGeneric,
         }
     }
 }
@@ -111,7 +125,6 @@ pub fn handle_user_input(
                 GateGenericBundle::from(Vec3::from((world_position.translation, 0.0)))
                 );
 
-            entity.insert(MapObject::GateGeneric);
             *edit_context = EditContext::Edit(MapObject::GateGeneric, vec![entity.id()], EditTool::Select);
         }
     }
@@ -137,18 +150,16 @@ pub fn system(
     let game_assets = game_assets.into_inner();
 
     for e in event.iter() {
-        let entity = e.0;
+        let entity = Entity::from_raw(e.0);
         let balltype = e.1;
 
         let (_, _, _, mut gate_generic) = query.get_mut(entity).unwrap();
         gate_generic.remain.push(balltype);
-        println!("receved event");
     }
 
     let mut rng = rand::thread_rng();
     for (entity, transform, bbsize, mut gate_generic) in query.iter_mut() {
         if gate_generic.remain.len() > 0 {
-            println!("gate_generic.remain.len() {}", gate_generic.remain.len());
             if rng.gen::<f32>() < gate_generic.prob {
                 let size = Vec2::new(bbsize.x, bbsize.y) * transform.scale.truncate();
                 let pos_max = transform.translation.truncate() + (size / 2.0);
@@ -169,6 +180,36 @@ pub fn system(
                     BallType::Zombie => {
                         let _ = commands.spawn(
                             cmp_ball_zombie::BallZombieBundle::from((Vec2::new(x, y), rad, Vec2::ZERO, game_assets)));
+                    }
+
+                    BallType::Type1P1 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type1::BallP1Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
+                    },
+
+                    BallType::Type1P2 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type1::BallP2Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
+                    }
+
+                    BallType::Type2P1 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type2::BallType2P1Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
+                    },
+
+                    BallType::Type2P2 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type2::BallType2P2Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
+                    }
+
+                    BallType::Type3P1 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type3::BallType3P1Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
+                    },
+
+                    BallType::Type3P2 => {
+                        let _ = commands.spawn(
+                            cmp_ball_type3::BallType3P2Bundle::from((Vec2::new(x, y), Vec2::ZERO, game_assets)));
                     }
                 }
             }
