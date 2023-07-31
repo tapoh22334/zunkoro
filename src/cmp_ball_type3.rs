@@ -15,8 +15,8 @@ use crate::cmp_combat::Player2;
 use crate::cmp_rotator::Rotator;
 
 const RADIUS: f32 = 80.0;
-const HP: f32 = 50.0;
-const ATTACK: f32 = 1.0;
+const HP: f32 = 100.0;
+const ATTACK: f32 = 2.0;
 const ANGVEL: f32 = -0.5;
 
 #[derive(Component)]
@@ -38,16 +38,19 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType3P1Bundle {
         let (translation, velocity, game_assets) = tuple;
 
         let handle = game_assets.image_handles.get("zun1_handle").unwrap();
-        let bundle = Self {
+        let mut bundle = Self {
             player1: Player1,
             ball_type: BallType3,
             status: Status {
                 hp: HP,
+                hp_max: HP,
                 attack: ATTACK,
             },
             rotator: Rotator {angvel: ANGVEL},
             ball_bundle: BallBundle::from((translation, RADIUS, velocity, handle.clone())),
         };
+
+        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_10, Group::ALL);
 
         bundle
     }
@@ -70,16 +73,19 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType3P2Bundle {
         let (translation, velocity, game_assets) = tuple;
 
         let handle = game_assets.image_handles.get("zombie1_handle").unwrap();
-        let bundle = Self {
+        let mut bundle = Self {
             player2: Player2,
             ball_type: BallType3,
             status: Status {
                 hp: HP,
+                hp_max: HP,
                 attack: ATTACK,
             },
             rotator: Rotator {angvel: -ANGVEL},
             ball_bundle: BallBundle::from((translation, RADIUS, velocity, handle.clone())),
         };
+
+        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_11, Group::ALL);
 
         bundle
     }

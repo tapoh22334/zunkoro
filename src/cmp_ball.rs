@@ -11,8 +11,8 @@ const DEFAULT_BALL_RADIUS: f32 = 19.0 / 2.0;
 //const DEFAULT_RESTITUTION: f32 = 0.1;
 //const DEFAULT_FRICTION: f32 = 0.011;
 
-const DEFAULT_RESTITUTION: f32 = 0.5;
-const DEFAULT_FRICTION: f32 = 0.5;
+const DEFAULT_RESTITUTION: f32 = 0.8;
+const DEFAULT_FRICTION: f32 = 0.8;
 
 #[derive(Component)]
 pub struct Ball {
@@ -109,7 +109,7 @@ pub fn kill(commands: &mut Commands,
                         "zundamon_die7_handle",
                      ];
         let random_audio = sv[rng.gen_range(0..sv.len())];
-        cmp_blood::add(commands, trans.translation.truncate(), 8);
+        cmp_blood::add(commands, trans.translation.truncate(), 4);
         commands.entity(entity).despawn();
         audio.play(game_assets.audio_handles.get(random_audio).unwrap().clone());
 }

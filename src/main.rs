@@ -35,6 +35,8 @@ mod cmp_block_zombie;
 use crate::cmp_block_zombie::BlockZombie;
 
 mod cmp_combat;
+use crate::cmp_combat::Player1;
+use crate::cmp_combat::Player2;
 
 mod cmp_converter_body;
 use crate::cmp_converter_body::ConverterBody;
@@ -100,6 +102,15 @@ use crate::cmp_spawn_timer::SpawnTimerBundle;
 
 mod cmp_vibrator;
 use crate::cmp_vibrator::Vibrator;
+
+mod cmp_wall;
+use crate::cmp_wall::Wall;
+use crate::cmp_wall::WallBundle;
+
+mod cmp_wall_breakable;
+use crate::cmp_wall_breakable::WallBreakable;
+use crate::cmp_wall_breakable::WallBreakableP1Bundle;
+use crate::cmp_wall_breakable::WallBreakableP2Bundle;
 
 mod cmp_trajectory;
 use crate::cmp_trajectory::Trajectory;
@@ -185,6 +196,8 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_ball_type3::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball_type4::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_explosion::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_explosion::system_damage1.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_explosion::system_damage2.in_set(OnUpdate(AppState::Game)))
         //.add_system(cmp_ball_zombie::system_infection.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_blood::system.in_set(OnUpdate(AppState::Game)))
@@ -259,6 +272,19 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .register_type::<PrimitiveShape>()
         .add_system(cmp_primitive_shape::load)
         .add_system(cmp_primitive_shape::save)
+
+        .register_type::<Wall>()
+        .add_system(cmp_wall::handle_user_input)
+
+        .register_type::<WallBreakable>()
+        .add_system(cmp_wall_breakable::handle_user_input)
+        .add_system(cmp_wall_breakable::system_damage::<Player1, Player2>)
+        .add_system(cmp_wall_breakable::system_damage::<Player2, Player1>)
+        .add_system(cmp_wall_breakable::system_color)
+        .add_system(cmp_wall_breakable::load_p1)
+        .add_system(cmp_wall_breakable::load_p2)
+        .add_system(cmp_wall_breakable::save_p1)
+        .add_system(cmp_wall_breakable::save_p2)
 
         .register_type::<RevoluteJoint>()
         .add_event::<DelayLoadRevoluteJoint>()
@@ -362,6 +388,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
 
     let image_mappings = [
         (include_bytes!("../assets/map_element/bomb.png").as_slice(), "bomb_handle"),
+        (include_bytes!("../assets/map_element/explosion/explosion00.png").as_slice(), "explosion_handle"),
         (include_bytes!("../assets/map_element/zun1.png").as_slice(), "zun1_handle"),
         (include_bytes!("../assets/map_element/zun2.png").as_slice(), "zun2_handle"),
         (include_bytes!("../assets/map_element/zun3.png").as_slice(), "zun3_handle"),
@@ -1240,6 +1267,26 @@ fn spawn_map_object (
             ui.label("Zundamon");
             if ui.button("o").clicked() {
                  new_edit_mode = Some(EditContext::Spawn(MapObject::Zundamon));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Wall");
+            if ui.button("Spawn").clicked() {
+                info!("Wall spawn start");
+                new_edit_mode = Some(EditContext::Spawn(MapObject::Wall));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("WallBreakable");
+            if ui.button("o").clicked() {
+                info!("Wall spawn start");
+                new_edit_mode = Some(EditContext::Spawn(MapObject::WallBreakableP1));
+            }
+            if ui.button("o").clicked() {
+                info!("Wall spawn start");
+                new_edit_mode = Some(EditContext::Spawn(MapObject::WallBreakableP2));
             }
         });
 

@@ -10,13 +10,14 @@ use crate::cmp_ball::Ball;
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct Status {
     pub hp: f32,
+    pub hp_max: f32,
     pub attack: f32,
 }
 
 
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+#[derive(Component, Reflect, Default, Clone, Serialize, Deserialize, Debug)]
 pub struct Player1;
-#[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
+#[derive(Component, Reflect, Default, Clone, Serialize, Deserialize, Debug)]
 pub struct Player2;
 
 fn display_contact_info(entity1: Entity, entity2: Entity, rapier_context: &Res<RapierContext>) {
@@ -49,24 +50,23 @@ pub fn system(
     audio: Res<Audio>,
     game_assets: Res<GameAsset>,
     rapier_context: Res<RapierContext>,
-    mut p1_q: Query<(Entity, &mut Status, &Transform, Option<&mut Velocity>, Option<&Ball>), (With<Player1>, Without<Player2>)>,
-    mut p2_q: Query<(Entity, &mut Status, &Transform, Option<&mut Velocity>, Option<&Ball>), (With<Player2>, Without<Player1>)>,
+    mut p1_q: Query<(Entity, &mut Status, &Transform), (With<Ball>, With<Player1>, Without<Player2>)>,
+    mut p2_q: Query<(Entity, &mut Status, &Transform), (With<Ball>, With<Player2>, Without<Player1>)>,
 ) {
-    for (p1_e, mut p1_c, p1_t, mut p1_v_opt, p1_ball_opt) in p1_q.iter_mut() {
-        for (p2_e, mut p2_c, p2_t, mut p2_v_opt, p2_ball_opt) in p2_q.iter_mut() {
+    for (p1_e, mut p1_c, p1_t) in p1_q.iter_mut() {
+        for (p2_e, mut p2_c, p2_t) in p2_q.iter_mut() {
             if let Some(contact_pair) = rapier_context.contact_pair(p1_e.clone(), p2_e.clone()) {
                 if contact_pair.has_any_active_contacts() {
                     println!("collision detect");
-                    let p1_damage = p2_c.attack;
-                    let p2_damage = p1_c.attack;
 
-                    p1_c.hp = p1_c.hp - p1_damage;
-                    p2_c.hp = p2_c.hp - p2_damage;
+                    p1_c.hp = p1_c.hp - p2_c.attack;
+                    p2_c.hp = p2_c.hp - p1_c.attack;
 
-                    cmp_blood::add(&mut commands, p1_t.translation.truncate(), p1_damage as usize);
-                    cmp_blood::add(&mut commands, p2_t.translation.truncate(), p2_damage as usize);
+                    cmp_blood::add(&mut commands, p1_t.translation.truncate(), 1);
+                    cmp_blood::add(&mut commands, p2_t.translation.truncate(), 1);
                 }
             }
         }
     }
 }
+
