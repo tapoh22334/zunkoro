@@ -18,7 +18,6 @@ use crate::cmp_gate_generic::SpawnBall;
 use crate::cmp_rotator::Rotator;
 use crate::edit_context::*;
 
-const BALL_SIZE: f32 = 10.0;
 pub const DEFAULT_SIZE_X: f32 = 10.0;
 pub const DEFAULT_SIZE_Y: f32 = 10.0;
 

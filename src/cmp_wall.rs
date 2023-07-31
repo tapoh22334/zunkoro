@@ -24,7 +24,6 @@ pub struct WallBundle {
     pub wall: Wall,
     pub bbsize: BBSize,
     pub collider: Collider,
-    pub collision_groups: CollisionGroups,
     pub restitution: Restitution,
     pub friction: Friction,
     pub rigid_body: RigidBody,
@@ -40,7 +39,6 @@ impl Default for WallBundle {
             bbsize: BBSize {x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y},
             wall: Wall,
             collider: Collider::cuboid(DEFAULT_SIZE_X / 2.0, DEFAULT_SIZE_Y / 2.0),
-            collision_groups: CollisionGroups::new(Group::GROUP_1, Group::ALL),
             restitution: Restitution::coefficient(constants::C_MAP_RESTITUTION),
             friction: Friction::coefficient(constants::C_MAP_FRICTION),
             rigid_body: RigidBody::KinematicVelocityBased,
@@ -117,6 +115,21 @@ pub fn handle_user_input(
 //    }
 //
 //}
+
+use crate::ev_despawn;
+pub fn despawn(
+    mut commands: Commands,
+    mut event: EventReader<ev_despawn::Despawn>,
+    query: Query<&Wall>,
+    ) {
+    for ev_despawn::Despawn(entity) in event.iter() {
+        println!("despawn1");
+        if query.contains(Entity::from_raw(entity.to_owned())) {
+            println!("despawn2");
+            commands.entity(Entity::from_raw(entity.to_owned())).despawn();
+        }
+    }
+}
 
 const FILE_NAME: &str = "/wall.map";
 use crate::ev_save_load_world::LoadWorldEvent;

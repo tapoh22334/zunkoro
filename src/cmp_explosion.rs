@@ -21,7 +21,9 @@ const ATTACK: f32 = 50.0;
 
 
 #[derive(Component)]
-pub struct Explosion;
+pub struct Explosion{
+    radius: f32
+}
 
 #[derive(Bundle)]
 pub struct ExplosionBundle {
@@ -38,7 +40,7 @@ pub struct ExplosionBundle {
 impl Default for ExplosionBundle {
     fn default() -> Self {
         Self {
-            explosion: Explosion,
+            explosion: Explosion{ radius: RADIUS },
             status: Status {
                 hp: HP,
                 hp_max: HP,
@@ -55,13 +57,14 @@ impl Default for ExplosionBundle {
     }
 }
 
-impl From<(Vec3, &GameAsset)> for ExplosionBundle {
-    fn from(tuple: (Vec3, &GameAsset)) -> Self {
-        let (translation, game_assets) = tuple;
+impl From<(Vec3, f32, &GameAsset)> for ExplosionBundle {
+    fn from(tuple: (Vec3, f32, &GameAsset)) -> Self {
+        let (translation, radius, game_assets) = tuple;
 
         let mut bundle = ExplosionBundle::default();
 
         let handle = game_assets.image_handles.get("explosion_handle").unwrap();
+        bundle.explosion.radius = radius;
         bundle.sprite_bundle = SpriteBundle {
             sprite: Sprite {
                 custom_size: Some(Vec2::ONE * (1.0 * 2.0)),
@@ -83,14 +86,14 @@ impl From<(Vec3, &GameAsset)> for ExplosionBundle {
 pub fn system(
     mut commands: Commands,
     time: Res<Time>,
-    mut explosion_q: Query<(Entity, &mut Transform, &mut FuseTime), With<Explosion>>,
+    mut explosion_q: Query<(Entity, &mut Transform, &mut FuseTime, &Explosion)>,
 ) {
-    for (entity, mut transform, mut fuse_time) in explosion_q.iter_mut() {
+    for (entity, mut transform, mut fuse_time, explosion) in explosion_q.iter_mut() {
         fuse_time.timer.tick(time.delta());
         if fuse_time.timer.finished() { 
             commands.entity(entity).despawn();
         } else {
-            transform.scale = (transform.scale * 1.1).clamp(Vec3::ZERO, Vec3::ONE * 200.0);
+            transform.scale = (transform.scale * 1.1).clamp(Vec3::ZERO, Vec3::ONE * explosion.radius);
         }
     }
 }

@@ -23,12 +23,14 @@ pub struct Ball {
 #[derive(Bundle)]
 pub struct BallBundle {
     pub ball: Ball,
+    pub ccd: Ccd,
     pub rigid_body: RigidBody,
     pub restitution: Restitution,
     pub friction: Friction,
     pub collider: Collider,
     pub collision_groups: CollisionGroups,
     pub velocity: Velocity,
+    pub external_impulse: ExternalImpulse,
     #[bundle]
     sprite_bundle: SpriteBundle,
 }
@@ -38,12 +40,14 @@ impl Default for BallBundle {
     fn default() -> Self {
         Self {
             ball: Ball { radius: DEFAULT_BALL_RADIUS, previous_position: None },
+            ccd: Ccd::enabled(),
             rigid_body: RigidBody::Dynamic,
             restitution: Restitution::coefficient(DEFAULT_RESTITUTION),
             friction: Friction::coefficient(DEFAULT_FRICTION),
             collider: Collider::ball(DEFAULT_BALL_RADIUS),
             collision_groups: CollisionGroups::new(Group::GROUP_1, Group::ALL),
             velocity: Velocity { linvel: Vec2::ZERO, angvel: 0.0 },
+            external_impulse: ExternalImpulse::default(),
             sprite_bundle: SpriteBundle {
                 ..default()
             },
@@ -55,6 +59,8 @@ impl From<(Vec2, f32, Vec2, Handle<Image>)> for BallBundle {
     fn from(tuple: (Vec2, f32, Vec2, Handle<Image>)) -> Self {
         let mut bundle = BallBundle::default();
         let (translation, radius, velocity, handle) = tuple;
+
+        bundle.ball.radius = radius;
 
         bundle.sprite_bundle = SpriteBundle {
             sprite: Sprite {

@@ -50,20 +50,31 @@ pub fn system(
     audio: Res<Audio>,
     game_assets: Res<GameAsset>,
     rapier_context: Res<RapierContext>,
-    mut p1_q: Query<(Entity, &mut Status, &Transform), (With<Ball>, With<Player1>, Without<Player2>)>,
-    mut p2_q: Query<(Entity, &mut Status, &Transform), (With<Ball>, With<Player2>, Without<Player1>)>,
+    mut p1_q: Query<(Entity, &mut Status, &Transform, &mut ExternalImpulse), (With<Ball>, With<Player1>, Without<Player2>)>,
+    mut p2_q: Query<(Entity, &mut Status, &Transform, &mut ExternalImpulse), (With<Ball>, With<Player2>, Without<Player1>)>,
 ) {
-    for (p1_e, mut p1_c, p1_t) in p1_q.iter_mut() {
-        for (p2_e, mut p2_c, p2_t) in p2_q.iter_mut() {
+    for (p1_e, mut p1_c, p1_t, mut p1_ei) in p1_q.iter_mut() {
+        for (p2_e, mut p2_c, p2_t, mut p2_ei) in p2_q.iter_mut() {
             if let Some(contact_pair) = rapier_context.contact_pair(p1_e.clone(), p2_e.clone()) {
                 if contact_pair.has_any_active_contacts() {
-                    println!("collision detect");
-
                     p1_c.hp = p1_c.hp - p2_c.attack;
                     p2_c.hp = p2_c.hp - p1_c.attack;
 
                     cmp_blood::add(&mut commands, p1_t.translation.truncate(), 1);
                     cmp_blood::add(&mut commands, p2_t.translation.truncate(), 1);
+
+                    let manifold = contact_pair.manifolds().next().unwrap();
+                    p1_ei.impulse = - manifold.local_n1() * 4.0;
+                    p2_ei.impulse = - manifold.local_n2() * 4.0;
+                    p1_ei.impulse.y += 2.5;
+                    p2_ei.impulse.y += 2.5;
+                    println!("start");
+                    println!("Local-space contact normal: {}", manifold.local_n1());
+                    println!("Local-space contact normal: {}", manifold.local_n2());
+                    println!("Local-space contact normal: {}", manifold.local_n1().distance(Vec2::ZERO));
+                    println!("Local-space contact normal: {}", manifold.local_n2().distance(Vec2::ZERO));
+                    println!("World-space contact normal: {}", manifold.normal());
+                    println!("end");
                 }
             }
         }

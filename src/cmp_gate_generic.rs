@@ -18,7 +18,7 @@ use crate::cmp_ball_type4;
 use crate::cmp_rotator::Rotator;
 use crate::edit_context::*;
 
-const BALL_SIZE: f32 = 10.0;
+const BALL_SIZE: f32 = 20.0;
 pub const DEFAULT_SIZE_X: f32 = 10.0;
 pub const DEFAULT_SIZE_Y: f32 = 10.0;
 

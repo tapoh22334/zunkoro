@@ -19,6 +19,7 @@ const RADIUS: f32 = 20.0;
 const HP: f32 = 1.0;
 const ATTACK: f32 = 1.0;
 const ANGVEL: f32 = -5.0;
+const EXPLOSION_RADIUS: f32 = 200.0;
 
 #[derive(Component)]
 pub struct BallType4;
@@ -51,7 +52,7 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType4P1Bundle {
             ball_bundle: BallBundle::from((translation, RADIUS, velocity, handle.clone())),
         };
 
-        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_10, Group::ALL);
+        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_10, Group::GROUP_1 | Group::GROUP_11);
 
         bundle
     }
@@ -86,7 +87,7 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallType4P2Bundle {
             ball_bundle: BallBundle::from((translation, RADIUS, velocity, handle.clone())),
         };
 
-        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_11, Group::ALL);
+        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_11, Group::GROUP_1 | Group::GROUP_10);
 
         bundle
     }
@@ -106,7 +107,7 @@ pub fn system(
         if s.hp <= 0.0 {
             commands.entity(e).despawn();
             //cmp_ball::kill(&mut commands, &audio, &game_assets, e, &t);
-            commands.spawn(cmp_explosion::ExplosionBundle::from((t.translation, game_assets)))
+            commands.spawn(cmp_explosion::ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets)))
                     .insert(Player1);
         }
     }
@@ -114,7 +115,7 @@ pub fn system(
     for (e, s, t, ball) in p2_q.iter() {
         if s.hp <= 0.0 {
             commands.entity(e).despawn();
-            commands.spawn(cmp_explosion::ExplosionBundle::from((t.translation, game_assets)))
+            commands.spawn(cmp_explosion::ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets)))
                     .insert(Player2);
             //cmp_ball::kill(&mut commands, &audio, &game_assets, e, &t);
         }

@@ -35,6 +35,7 @@ mod cmp_block_zombie;
 use crate::cmp_block_zombie::BlockZombie;
 
 mod cmp_combat;
+use crate::cmp_combat::Status;
 use crate::cmp_combat::Player1;
 use crate::cmp_combat::Player2;
 
@@ -107,10 +108,15 @@ mod cmp_wall;
 use crate::cmp_wall::Wall;
 use crate::cmp_wall::WallBundle;
 
-mod cmp_wall_breakable;
-use crate::cmp_wall_breakable::WallBreakable;
-use crate::cmp_wall_breakable::WallBreakableP1Bundle;
-use crate::cmp_wall_breakable::WallBreakableP2Bundle;
+mod cmp_breakable;
+use crate::cmp_breakable::Breakable;
+use crate::cmp_breakable::BreakableP1Bundle;
+use crate::cmp_breakable::BreakableP2Bundle;
+
+mod cmp_breakable_sync;
+use crate::cmp_breakable_sync::BreakableSync;
+use crate::cmp_breakable_sync::BreakableSyncP1Bundle;
+use crate::cmp_breakable_sync::BreakableSyncP2Bundle;
 
 mod cmp_trajectory;
 use crate::cmp_trajectory::Trajectory;
@@ -127,6 +133,9 @@ use crate::cmp_main_camera::MainCamera;
 mod ev_save_load_world;
 use crate::ev_save_load_world::SaveWorldEvent;
 use crate::ev_save_load_world::LoadWorldEvent;
+
+mod ev_despawn;
+use ev_despawn::Despawn;
 
 mod edit_context;
 use crate::edit_context::*;
@@ -163,9 +172,9 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .insert_resource(GameAsset::default())
         .insert_resource(edit_context::EditContext::Edit(MapObject::None, vec![], edit_context::EditTool::Select))
         .insert_resource(EguiWindowClicked(false))
-        .add_plugin(WorldInspectorPlugin::new())
+        //.add_plugin(WorldInspectorPlugin::new())
         .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
-        .add_plugin(RapierDebugRenderPlugin::default())
+        //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
@@ -183,6 +192,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .add_system(setup_ui.in_schedule(OnEnter(AppState::Game)))
 
+        .add_event::<Despawn>()
         .add_event::<SaveWorldEvent>()
         .add_event::<LoadWorldEvent>()
 
@@ -209,10 +219,13 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_artillery::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_artillery::system_fire.in_set(OnUpdate(AppState::Game)))
 
+        .register_type::<BBSize>()
+
         .register_type::<BlockZombie>()
         .add_system(cmp_block_zombie::load)
         .add_system(cmp_block_zombie::save)
 
+        .register_type::<Status>()
         .add_system(cmp_combat::system)
 
         .register_type::<ConverterBody>()
@@ -275,16 +288,29 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .register_type::<Wall>()
         .add_system(cmp_wall::handle_user_input)
+        .add_system(cmp_wall::despawn)
+        .add_system(cmp_wall::load)
+        .add_system(cmp_wall::save)
 
-        .register_type::<WallBreakable>()
-        .add_system(cmp_wall_breakable::handle_user_input)
-        .add_system(cmp_wall_breakable::system_damage::<Player1, Player2>)
-        .add_system(cmp_wall_breakable::system_damage::<Player2, Player1>)
-        .add_system(cmp_wall_breakable::system_color)
-        .add_system(cmp_wall_breakable::load_p1)
-        .add_system(cmp_wall_breakable::load_p2)
-        .add_system(cmp_wall_breakable::save_p1)
-        .add_system(cmp_wall_breakable::save_p2)
+        .register_type::<Breakable>()
+        .add_system(cmp_breakable::handle_user_input)
+        .add_system(cmp_breakable::system_damage::<Player1, Player2>)
+        .add_system(cmp_breakable::system_damage::<Player2, Player1>)
+        .add_system(cmp_breakable::system_color)
+        .add_system(cmp_breakable::load_p1)
+        .add_system(cmp_breakable::load_p2)
+        .add_system(cmp_breakable::save_p1)
+        .add_system(cmp_breakable::save_p2)
+
+        .register_type::<BreakableSync>()
+        .add_system(cmp_breakable_sync::handle_user_input)
+        .add_system(cmp_breakable_sync::system_damage::<Player1, Player2>)
+        .add_system(cmp_breakable_sync::system_damage::<Player2, Player1>)
+        .add_system(cmp_breakable_sync::system_color)
+        .add_system(cmp_breakable_sync::load_p1)
+        .add_system(cmp_breakable_sync::load_p2)
+        .add_system(cmp_breakable_sync::save_p1)
+        .add_system(cmp_breakable_sync::save_p2)
 
         .register_type::<RevoluteJoint>()
         .add_event::<DelayLoadRevoluteJoint>()
@@ -599,11 +625,17 @@ fn handle_user_input(
                     }
                 }
 
+                let round_off = |x: f32| -> f32 { (x / 10.0).round() * 10.0 };
+                let round_off_vec = |v: Vec2| {
+                    let mut ret = Vec2::ZERO;
+                    ret.x = round_off(v.x);
+                    ret.y = round_off(v.y);
+                    ret
+                };
                 match edit_tool {
                     EditTool::Translate => {
                         if pick.len() > 0 {
                             let entity = pick[0];
-                            let round_off = |x: f32| -> f32 { (x / 10.0).round() * 10.0 };
                             if let Ok((_, mut transform, _, _)) = query.get_mut(entity) {
                                 transform.translation.x = round_off(world_position.x);
                                 transform.translation.y = round_off(world_position.y);
@@ -627,8 +659,9 @@ fn handle_user_input(
                         if pick.len() > 0 {
                             let entity = pick[0];
                             if let Ok((_, mut transform, bbsize, _)) = query.get_mut(entity) {
+                                let wp = round_off_vec(world_position);
                                 let pos = Vec2::new(transform.translation.x, transform.translation.y);
-                                let r = pos.distance(world_position);
+                                let r = pos.distance(wp);
                                 let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
                                 println!("scale: {:?}", Vec3::ONE * scale);
                                 let scale = (scale * 10.0).round() / 10.0;
@@ -641,8 +674,9 @@ fn handle_user_input(
                         if pick.len() > 0 {
                             let entity = pick[0];
                             if let Ok((_, mut transform, bbsize, _)) = query.get_mut(entity) {
+                                let wp = round_off_vec(world_position);
                                 let pos = transform.translation.truncate();
-                                let diff = world_position - pos;
+                                let diff = wp - pos;
                                 let scale = diff / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
                                 let scale = (scale * 10.0).round() / 10.0;
                                 transform.scale = Vec3::new(scale.x.abs().max(0.1), scale.y.abs().max(0.1), 1.0);
@@ -839,7 +873,6 @@ fn handle_user_input(
                                 };
                                 //let entity = cmp_ball::add(&mut commands, &game_assets, world_position, 40.0, Vec2::new(0.0, 0.0));
                                 let mut entity = commands.spawn(PrimitiveShapeBundle::from((t, r, s, primitive_shape)));
-                                entity.insert(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SBox));
                                 *edit_context = EditContext::Edit(MapObject::PrimitiveShape(cmp_primitive_shape::Shape::SBox), vec![entity.id()], EditTool::Select);
                             }
                         }
@@ -904,7 +937,7 @@ fn handle_user_input(
 
                                 let t = transform.translation.x;
                                 let distance = cmp_primitive_shape::DEFAULT_SIZE_X;
-                                let speed = 100.0;
+                                let speed = 50.0;
 
                                 let vibrator = Vibrator {
                                     direction: cmp_vibrator::Direction::Horizontal,
@@ -1101,6 +1134,18 @@ fn spawn_map_object (
                     }
                 }
             }
+
+            if ui.button("o").clicked() {
+                info!("Splitter Gate spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Zundamon)]
+                                    )));
+                    }
+                }
+            }
         });
 
         ui.horizontal(|ui: &mut egui::Ui| {
@@ -1124,7 +1169,7 @@ fn spawn_map_object (
             if ui.button("o").clicked() {
                 if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
                     if entity_vec.len() == 2 {
-                        let mut v = vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon)];
+                        let mut v = vec![SpawnBall(entity_vec[0].index(), BallType::Zombie)];
                         for i in 0..10 {
                             v.push(SpawnBall(entity_vec[1].index(), BallType::Type2P2));
                         }
@@ -1150,6 +1195,18 @@ fn spawn_map_object (
                         new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
                                                 vec![SpawnBall(entity_vec[0].index(), BallType::Zombie),
                                                     SpawnBall(entity_vec[1].index(), BallType::Type4P2)]
+                                    )));
+                    }
+                }
+            }
+
+            if ui.button("o").clicked() {
+                info!("Splitter Gate spawn start");
+                if let EditContext::Edit(_, entity_vec, EditTool::Select) = edit_mode.clone() {
+                    if entity_vec.len() == 2 {
+                        new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
+                                                vec![SpawnBall(entity_vec[0].index(), BallType::Zombie),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Zombie)]
                                     )));
                     }
                 }
@@ -1278,19 +1335,35 @@ fn spawn_map_object (
             }
         });
 
+        ui.separator();
         ui.horizontal(|ui: &mut egui::Ui| {
-            ui.label("WallBreakable");
+            ui.label("Breakable");
             if ui.button("o").clicked() {
-                info!("Wall spawn start");
-                new_edit_mode = Some(EditContext::Spawn(MapObject::WallBreakableP1));
+                if let EditContext::Edit(_, entity_vec, edit_tool) = edit_mode.clone() {
+                    new_edit_mode = Some(EditContext::Spawn(MapObject::BreakableP1(entity_vec)));
+                }
             }
             if ui.button("o").clicked() {
-                info!("Wall spawn start");
-                new_edit_mode = Some(EditContext::Spawn(MapObject::WallBreakableP2));
+                if let EditContext::Edit(_, entity_vec, edit_tool) = edit_mode.clone() {
+                    new_edit_mode = Some(EditContext::Spawn(MapObject::BreakableP2(entity_vec)));
+                }
             }
         });
 
-        ui.separator();
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Breakable Sync");
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(_, entity_vec, edit_tool) = edit_mode.clone() {
+                    new_edit_mode = Some(EditContext::Spawn(MapObject::BreakableSyncP1(entity_vec)));
+                }
+            }
+            if ui.button("o").clicked() {
+                if let EditContext::Edit(_, entity_vec, edit_tool) = edit_mode.clone() {
+                    new_edit_mode = Some(EditContext::Spawn(MapObject::BreakableSyncP2(entity_vec)));
+                }
+            }
+        });
+
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label("Vibrator");
             if ui.button("o").clicked() {

@@ -4,9 +4,8 @@ use rand::prelude::*;
 
 use crate::cmp_fuse_time::FuseTime;
 
-const SPAWN_NUM: usize = 8;
 const LIFE_TIME: f32 = 3.0;
-const BALL_RADIUS: f32 = 2.0;
+const BALL_RADIUS: f32 = 1.0;
 const DEFAULT_RESTITUTION: f32 = 0.0;
 const DEFAULT_FRICTION: f32 = 0.9;
 
@@ -36,7 +35,7 @@ impl Default for BloodBundle {
             restitution: Restitution::coefficient(DEFAULT_RESTITUTION),
             friction: Friction::coefficient(DEFAULT_FRICTION),
             collider: Collider::ball(BALL_RADIUS),
-            collision_groups: CollisionGroups::new(Group::GROUP_1, Group::ALL),
+            collision_groups: CollisionGroups::new(Group::GROUP_1, Group::GROUP_1),
             velocity: Velocity { linvel: Vec2::ZERO, angvel: 0.0 },
             fuse_time: FuseTime{timer: Timer::from_seconds(LIFE_TIME, TimerMode::Once)},
             sprite_bundle: SpriteBundle {

@@ -7,6 +7,7 @@ use bevy_prototype_lyon::prelude::*;
 use crate::BBSize;
 use crate::constants;
 use crate::ev_save_load_world::Derrived;
+use crate::edit_context::*;
 
 
 #[derive(Default, Component, Reflect, FromReflect, Clone, Copy, PartialEq, Serialize, Deserialize, Debug)]
@@ -36,6 +37,7 @@ pub struct PrimitiveShapeBundle {
     velocity: Velocity,
     rigid_body: RigidBody,
     mass_property: ColliderMassProperties,
+    map_object: MapObject,
     #[bundle]
     shape_bundle: ShapeBundle,
 }
@@ -56,8 +58,8 @@ impl Default for PrimitiveShapeBundle {
                 ..default()
             },
             collider: Collider::polyline(load_shape_polyline(shape), None),
-            restitution: Restitution::coefficient(constants::C_MAP_RESTITUTION),
-            friction: Friction::coefficient(constants::C_MAP_FRICTION),
+            restitution: Restitution::coefficient(constants::C_PRIMITIVE_SHAPE_RESTITUTION),
+            friction: Friction::coefficient(constants::C_PRIMITIVE_SHAPE_FRICTION),
             color: Fill::color(Color::BLACK),
             stroke: Stroke::new(Color::BLACK, 1.0),
             bbsize: BBSize{x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y},
@@ -70,9 +72,11 @@ impl Default for PrimitiveShapeBundle {
                 mass: constants::C_DEFAULT_MASS,
                 principal_inertia: constants::C_DEFAULT_INERTIA,
             }),
+            map_object: MapObject::PrimitiveShape(Shape::SBox),
             shape_bundle: ShapeBundle{
                 path: GeometryBuilder::build_as(&polygon),
                 transform: Transform {
+                    scale: Vec3::ONE,
                     ..default()
                 },
                 ..default()
@@ -86,15 +90,14 @@ impl From<(Vec3, Quat, Vec3, PrimitiveShape)> for PrimitiveShapeBundle {
     fn from(tuple: (Vec3, Quat, Vec3, PrimitiveShape)) -> Self {
         let (translation, rotation, scale, primitive_shape) = tuple;
 
-        println!("from primitive shape");
-        let polyline = load_shape_polyline(primitive_shape.shape);
+        let polyline = load_shape_polyline(primitive_shape.shape.clone());
         let polygon = shapes::Polygon {points: polyline.clone(), closed: false};
 
         Self {
-            primitive_shape,
+            primitive_shape: primitive_shape.clone(),
             collider: Collider::polyline(polyline, None),
             bbsize: BBSize {
-                x: DEFAULT_SIZE_X * scale.x, y: DEFAULT_SIZE_Y * scale.y
+                x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y
             },
             shape_bundle: ShapeBundle {
                 path: GeometryBuilder::build_as(&polygon),
@@ -105,6 +108,7 @@ impl From<(Vec3, Quat, Vec3, PrimitiveShape)> for PrimitiveShapeBundle {
                 },
                 ..default()
             },
+            map_object: MapObject::PrimitiveShape(primitive_shape.shape),
             ..default()
         }
     }
@@ -153,7 +157,7 @@ pub fn load(
                 = serde_json::from_str(&json_str).unwrap();
 
             for (i, t, r, s, ps) in elem_list {
-                println!("load {:?}", i);
+                println!("{:?}", i);
                 let mut entity = commands.get_or_spawn(Entity::from_raw(i));
                 entity.insert(PrimitiveShapeBundle::from((t, r, s, ps)));
             }

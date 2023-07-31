@@ -15,7 +15,7 @@ use crate::cmp_combat::Player2;
 use crate::cmp_rotator::Rotator;
 
 const RADIUS: f32 = 20.0;
-const HP: f32 = 30.0;
+const HP: f32 = 100.0;
 const ATTACK: f32 = 1.0;
 const ANGVEL: f32 = -1.5;
 
@@ -50,7 +50,7 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallP1Bundle {
             ball_bundle: BallBundle::from((translation, RADIUS, velocity, handle.clone())),
         };
 
-        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_10, Group::ALL);
+        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_10, Group::GROUP_1 | Group::GROUP_11);
 
         bundle
     }
@@ -85,7 +85,7 @@ impl From<(Vec2, Vec2, &GameAsset)> for BallP2Bundle {
             ball_bundle: BallBundle::from((translation, RADIUS, velocity, handle.clone())),
         };
 
-        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_11, Group::ALL);
+        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_11, Group::GROUP_1 | Group::GROUP_10);
 
         bundle
     }
