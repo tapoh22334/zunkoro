@@ -68,13 +68,6 @@ pub fn system(
                     p2_ei.impulse = - manifold.local_n2() * 4.0;
                     p1_ei.impulse.y += 2.5;
                     p2_ei.impulse.y += 2.5;
-                    println!("start");
-                    println!("Local-space contact normal: {}", manifold.local_n1());
-                    println!("Local-space contact normal: {}", manifold.local_n2());
-                    println!("Local-space contact normal: {}", manifold.local_n1().distance(Vec2::ZERO));
-                    println!("Local-space contact normal: {}", manifold.local_n2().distance(Vec2::ZERO));
-                    println!("World-space contact normal: {}", manifold.normal());
-                    println!("end");
                 }
             }
         }

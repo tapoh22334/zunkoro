@@ -1,21 +1,25 @@
 use serde::{Serialize, Deserialize};
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
+use crate::cmp_ball_bomb::BallBombBundle;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball::Ball;
+use crate::cmp_fuse_time::FuseTime;
 
 use crate::cmp_combat::Player1;
 use crate::cmp_combat::Player2;
 
 const DEFAULT_RADIUS: f32 = 512.0 / 2.0;
 const DEFAULT_RANGE: f32 = 0.25 * std::f32::consts::PI;
+const COOL_TIME: f32 = 10.0;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug, Default)]
 pub struct ArtilleryAuto {
     pub angvel: f32,
     pub angle: f32,
     pub angle_range: (f32, f32),
+    pub cool_time: f32,
     }
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
@@ -53,6 +57,7 @@ impl From<(Quat, &GameAsset)> for ArtilleryAutoBarrelBundle {
 pub struct ArtilleryAutoBaseBundle<T: Component + Default> {
     player: T,
     artillery: ArtilleryAuto,
+    fuse_time: FuseTime,
     bbsize: BBSize,
     collider: Collider,
     collision_groups: CollisionGroups,
@@ -68,6 +73,7 @@ impl<T: Component + Default> From<&GameAsset> for ArtilleryAutoBaseBundle<T> {
         Self {
             player: T::default(),
             artillery: ArtilleryAuto::default(),
+            fuse_time: FuseTime{timer: Timer::from_seconds(0.0, TimerMode::Once)},
             bbsize: BBSize{x: DEFAULT_RADIUS * 2.0, y: DEFAULT_RADIUS * 2.0},
             collider: Collider::ball(DEFAULT_RADIUS),
             collision_groups: CollisionGroups::new(Group::GROUP_1, Group::GROUP_1 | Group::GROUP_2),
@@ -121,13 +127,15 @@ pub fn handle_user_input(
 
     if buttons.just_pressed(MouseButton::Left) {
         if let EditContext::Spawn(map_object) = edit_context.clone() {
+            let artillery = ArtilleryAuto {
+                angvel: 0.5,
+                angle: 0.0,
+                angle_range: (-DEFAULT_RANGE, DEFAULT_RANGE),
+                cool_time: COOL_TIME,
+            };
+
             if let MapObject::ArtilleryAutoP1 = map_object {
                 if buttons.just_pressed(MouseButton::Left) {
-                    let artillery = ArtilleryAuto {
-                        angvel: 0.5,
-                        angle: 0.0,
-                        angle_range: (-DEFAULT_RANGE, DEFAULT_RANGE)
-                    };
                     let mut entity = commands.spawn(ArtilleryAutoBaseBundle::<Player1>::from((
                                 Vec3::from((world_position.translation, 2.0)),
                                 Vec3::ONE,
@@ -144,11 +152,6 @@ pub fn handle_user_input(
 
             else if let MapObject::ArtilleryAutoP2 = map_object {
                 if buttons.just_pressed(MouseButton::Left) {
-                    let artillery = ArtilleryAuto {
-                        angvel: 0.5,
-                        angle: 0.0,
-                        angle_range: (-DEFAULT_RANGE, DEFAULT_RANGE)
-                    };
                     let mut entity = commands.spawn(ArtilleryAutoBaseBundle::<Player2>::from((
                                 Vec3::from((world_position.translation, 2.0)),
                                 Vec3::ONE,
@@ -199,7 +202,8 @@ pub fn handle_user_input(
 
 }
 
-pub fn find_nearest<T: Component>(ball_q: &Query<(Entity, &mut Transform, &mut Velocity, &Ball), (With<T>, Without<Barrel>)>, translation: &Vec3) -> Option<(Entity, f32)> {
+pub fn find_nearest<T: Component>(ball_q: &Query<(Entity, &mut Transform, &mut Velocity, &Ball), (With<T>, Without<Barrel>)>,
+                                  translation: &Vec3) -> Option<(Entity, f32)> {
     let mut min: Option<(Entity, f32)> = None;
     for (entity, ball_t, _, _) in ball_q {
         let distance = translation.truncate().distance(ball_t.translation.truncate());
@@ -222,56 +226,70 @@ fn normalized_angle(angle: f32) -> f32 {
 }
 
 const DETECTION_RANGE: f32 = 1000.0;
-pub fn system<T1: Component, T2: Component>(
+pub fn system<T1: Component + Default, T2: Component>(
+    mut commands: Commands,
     time: Res<Time>,
+    game_assets: Res<GameAsset>,
     mut ball_q: Query<(Entity, &mut Transform, &mut Velocity, &Ball), (With<T2>, Without<Barrel>)>,
-    mut artillery_frag1: Query<(Entity, &Children, &Transform, &mut ArtilleryAuto), (With<T1>, Without<Barrel>, Without<Ball>)>,
+    mut artillery_frag1: Query<(Entity, &Children, &Transform, &mut FuseTime, &mut ArtilleryAuto), (With<T1>, Without<Barrel>, Without<Ball>)>,
     mut artillery_frag2: Query<&mut Transform, (With<Barrel>, Without<Ball>)>,
 ) {
-    for (entity, children, transform, mut artillery) in artillery_frag1.iter_mut() {
+    let game_assets = game_assets.into_inner();
+
+    for (entity, children, transform, mut fuse_time, mut artillery) in artillery_frag1.iter_mut() {
         let child = children.iter().next().unwrap();
         let mut barrel_transform = artillery_frag2.get_mut(child.to_owned()).unwrap();
 
-        let mut angle_delta: f32 = 0.0;
-        if let Some((entity, distance)) = find_nearest(&ball_q, &transform.translation) {
-            if distance <= DETECTION_RANGE {
+        let mut angle_delta: f32 = artillery.angvel * time.delta_seconds();
+        let mut distance: f32 = std::f32::MAX;
+        let nearest = find_nearest(&ball_q, &transform.translation);
+
+        if let Some((entity, dist)) = nearest {
+            if dist <= DETECTION_RANGE {
                 let (entity, ball_t, _, _) = ball_q.get(entity).unwrap();
                 let angle = {
                     let dir = (ball_t.translation.truncate() - transform.translation.truncate()).normalize();
                     let q1 = Quat::from_rotation_z(artillery.angle);
                     let q2 = Quat::from_rotation_z(Vec2::new(1.0, 0.0).angle_between(dir));
                     let q_between = q1.conjugate() * q2;
-                    let (axis, mut angle) = q_between.to_axis_angle();
-                    println!("axis, angle, {:?}, {:?}", axis.z, angle);
-                    if axis.z < 0.0 {
-                        angle -= std::f32::consts::PI;
-                    }
+
+                    let angle = q_between.to_euler(EulerRot::ZYX).0;
                     angle
                 };
 
                 angle_delta = normalized_angle(angle);
                 let clamp = artillery.angvel.abs() * time.delta_seconds();
                 angle_delta = angle_delta.clamp(-clamp, clamp);
-
-
-            } else {
-                angle_delta = artillery.angvel * time.delta_seconds();
             }
-        } else {
-            angle_delta = artillery.angvel * time.delta_seconds();
+            distance = dist;
+        }
+        // set angle
+        {
+            let new_angle = artillery.angle + angle_delta;
+
+            let pivot_rotation = Quat::from_rotation_z(new_angle - artillery.angle);
+            barrel_transform.rotate_around(Vec3::ZERO, pivot_rotation);
+
+            artillery.angle = new_angle;
+
+            if artillery.angle <= artillery.angle_range.0 {
+                artillery.angvel = artillery.angvel.abs();
+            } else if artillery.angle >= artillery.angle_range.1 {
+                artillery.angvel = -artillery.angvel.abs();
+            }
         }
 
-        let new_angle = artillery.angle + angle_delta;
-
-        let pivot_rotation = Quat::from_rotation_z(new_angle - artillery.angle);
-        barrel_transform.rotate_around(Vec3::ZERO, pivot_rotation);
-
-        artillery.angle = new_angle;
-
-        if artillery.angle <= artillery.angle_range.0 {
-            artillery.angvel = artillery.angvel.abs();
-        } else if artillery.angle >= artillery.angle_range.1 {
-            artillery.angvel = -artillery.angvel.abs();
+        // fire
+        {
+            fuse_time.timer.tick(time.delta());
+            if distance <= DETECTION_RANGE && angle_delta < 0.001 {
+                if fuse_time.timer.finished() { 
+                    let dir = Quat::from_rotation_z(artillery.angle).mul_vec3(Vec3::new(1.0, 0.0, 0.0));
+                    let bundle = BallBombBundle::<T1>::from((transform.translation.truncate(), dir.truncate() * 400.0, game_assets));
+                    commands.spawn(bundle);
+                    fuse_time.timer = Timer::from_seconds(artillery.cool_time, TimerMode::Once);
+                }
+            }
         }
     }
 }
@@ -282,16 +300,6 @@ pub fn system_fire(
     mut ball_q: Query<(Entity, &mut Transform, &mut Velocity, &Ball)>,
     artillery_q: Query<(Entity, &Transform, &BBSize, &ArtilleryAuto), Without<Ball>>,
 ) {
-    for (artillery_e, artillery_transform, bbsize, artillery) in artillery_q.iter() {
-        for (ball_e, mut ball_transform, mut ball_velocity, ball) in ball_q.iter_mut() {
-            if rapier_context.intersection_pair(artillery_e, ball_e) == Some(true) {
-                let dir = Quat::from_rotation_z(artillery.angle).mul_vec3(Vec3::new(1.0, 0.0, 0.0));
-                let dist = bbsize.x / 2.0 * artillery_transform.scale.x + ball.radius + 1.0;
-                ball_transform.translation = artillery_transform.translation + dir * dist;
-                ball_velocity.linvel = dir.truncate() * 400.0;
-            }
-        }
-    }
 }
 
 

@@ -25,6 +25,7 @@ mod cmp_bbsize;
 use crate::cmp_bbsize::BBSize;
 
 mod cmp_ball;
+mod cmp_ball_bomb;
 mod cmp_ball_type1;
 mod cmp_ball_type2;
 mod cmp_ball_type3;
@@ -204,6 +205,10 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         //.add_system(cmp_ball::system_remove.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball::system_trajectory.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_bomb::system::<Player1>.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_bomb::system::<Player2>.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_bomb::system_ignition::<Player1>.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_ball_bomb::system_ignition::<Player2>.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball_type1::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball_type2::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_ball_type3::system.in_set(OnUpdate(AppState::Game)))

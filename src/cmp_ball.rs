@@ -75,6 +75,7 @@ impl From<(Vec2, f32, Vec2, Handle<Image>)> for BallBundle {
             ..default()
         };
 
+        bundle.velocity.linvel = velocity;
         bundle.collider = Collider::ball(radius);
 
         bundle
