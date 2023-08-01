@@ -19,6 +19,7 @@ use crate::cmp_rotator::Rotator;
 const RADIUS: f32 = 20.0;
 const HP: f32 = 1.0;
 const ATTACK: f32 = 1.0;
+const EXPLOSION_ATTACK: f32 = 0.1;
 const ANGVEL: f32 = -5.0;
 const EXPLOSION_RADIUS: f32 = 100.0;
 
@@ -45,7 +46,7 @@ impl<T: Component + Default> From<(Vec2, Vec2, &GameAsset)> for BallBombBundle<T
             collision_events: ActiveEvents::COLLISION_EVENTS,
             ball_bundle: BallBundle::from((translation, RADIUS, velocity, handle.clone())),
         };
-        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_1, Group::GROUP_1);
+        bundle.ball_bundle.collision_groups = CollisionGroups::new(Group::GROUP_13, Group::GROUP_1);
 
         bundle
     }
@@ -57,16 +58,6 @@ pub fn system<T: Component + Default>(
     game_assets: Res<GameAsset>,
     mut p1_q: Query<(Entity, &Status, &Transform, &BallBomb), With<T>>,
 ) {
-    let game_assets = game_assets.into_inner();
-
-    for (e, s, t, ball) in p1_q.iter() {
-        if s.hp <= 0.0 {
-            commands.entity(e).despawn();
-            //cmp_ball::kill(&mut commands, &audio, &game_assets, e, &t);
-            commands.spawn(cmp_explosion::ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets)))
-                    .insert(T::default());
-        }
-    }
 }
 
 pub fn system_ignition<T1: Component + Default>(
@@ -84,12 +75,18 @@ pub fn system_ignition<T1: Component + Default>(
 
             if flags.is_empty() && (query.contains(*e1) || query.contains(*e2)) {
                 if let Ok((entity, t)) = query.get(*e1) {
+                    let mut bundle = ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets));
+                    bundle.status.attack = EXPLOSION_ATTACK;
+
                     commands.entity(entity).despawn();
-                    commands.spawn(ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets)))
+                    commands.spawn(bundle)
                         .insert(T1::default());
                 } else if let Ok((entity, t)) = query.get(*e2) {
+                    let mut bundle = ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets));
+                    bundle.status.attack = EXPLOSION_ATTACK;
+
                     commands.entity(entity).despawn();
-                    commands.spawn(ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets)))
+                    commands.spawn(bundle)
                         .insert(T1::default());
                 }
             }

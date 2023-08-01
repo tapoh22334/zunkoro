@@ -5,6 +5,7 @@ use crate::cmp_ball_bomb::BallBombBundle;
 use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball::Ball;
+use crate::cmp_explosion::ExplosionBundle;
 use crate::cmp_fuse_time::FuseTime;
 
 use crate::cmp_combat::Player1;
@@ -321,6 +322,23 @@ fn get_map_object<T: 'static>() -> MapObject {
     else {
         MapObject::ArtilleryAutoP2
     } 
+}
+
+use crate::ev_despawn;
+pub fn despawn(
+    mut commands: Commands,
+    mut event: EventReader<ev_despawn::Despawn>,
+    game_assets: Res<GameAsset>,
+    query: Query<(&Transform, &ArtilleryAuto)>,
+    ) {
+    let game_assets = game_assets.into_inner();
+    for ev_despawn::Despawn(entity) in event.iter() {
+        if query.contains(Entity::from_raw(*entity)) {
+            let (t, _) = query.get(Entity::from_raw(*entity)).unwrap();
+            commands.entity(Entity::from_raw(*entity)).despawn_recursive();
+            commands.spawn(ExplosionBundle::from((t.translation, 500.0, game_assets)));
+        }
+    }
 }
 
 use crate::ev_save_load_world::LoadWorldEvent;
