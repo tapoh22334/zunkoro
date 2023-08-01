@@ -18,6 +18,9 @@ mod constants;
 mod cmp_artillery;
 use crate::cmp_artillery::Artillery;
 
+mod cmp_artillery_auto;
+use crate::cmp_artillery_auto::ArtilleryAuto;
+
 mod cmp_bbsize;
 use crate::cmp_bbsize::BBSize;
 
@@ -218,6 +221,15 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_artillery::save)
         .add_system(cmp_artillery::system.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_artillery::system_fire.in_set(OnUpdate(AppState::Game)))
+
+        .register_type::<ArtilleryAuto>()
+        .add_system(cmp_artillery_auto::handle_user_input)
+        .add_system(cmp_artillery_auto::load<Player1>)
+        .add_system(cmp_artillery_auto::save<Player1>)
+        .add_system(cmp_artillery_auto::load<Player2>)
+        .add_system(cmp_artillery_auto::save<Player2>)
+        .add_system(cmp_artillery_auto::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_artillery_auto::system_fire.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<BBSize>()
 

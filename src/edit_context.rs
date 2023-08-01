@@ -19,6 +19,8 @@ pub enum EditTool { #[default] Select,
 pub enum MapObject {
     #[default]None,
     Artillery,
+    ArtilleryAutoP1,
+    ArtilleryAutoP2,
     BlockZombie,
     ConverterBody,
     GearSimple,
