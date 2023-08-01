@@ -108,7 +108,6 @@ pub fn system_damage1(
     for (sensor_e, sensor_s, sensor_t) in explosion_q.iter_mut() {
         for (ball_e, mut ball_s, ball_t) in ball_q.iter_mut() {
             if rapier_context.intersection_pair(sensor_e.clone(), ball_e.clone()).is_some() {
-                println!("{:?}", sensor_s.attack);
                 ball_s.hp = ball_s.hp - sensor_s.attack;
             }
         }
