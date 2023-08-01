@@ -224,11 +224,12 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 
         .register_type::<ArtilleryAuto>()
         .add_system(cmp_artillery_auto::handle_user_input)
-        .add_system(cmp_artillery_auto::load<Player1>)
-        .add_system(cmp_artillery_auto::save<Player1>)
-        .add_system(cmp_artillery_auto::load<Player2>)
-        .add_system(cmp_artillery_auto::save<Player2>)
-        .add_system(cmp_artillery_auto::system.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_artillery_auto::load::<Player1>)
+        .add_system(cmp_artillery_auto::save::<Player1>)
+        .add_system(cmp_artillery_auto::load::<Player2>)
+        .add_system(cmp_artillery_auto::save::<Player2>)
+        .add_system(cmp_artillery_auto::system::<Player1, Player2>.in_set(OnUpdate(AppState::Game)))
+        .add_system(cmp_artillery_auto::system::<Player2, Player1>.in_set(OnUpdate(AppState::Game)))
         .add_system(cmp_artillery_auto::system_fire.in_set(OnUpdate(AppState::Game)))
 
         .register_type::<BBSize>()
@@ -1045,6 +1046,16 @@ fn spawn_map_object (
             if ui.button("Spawn").clicked() {
                 info!("Artillery spawned");
                 new_edit_mode = Some(EditContext::Spawn(MapObject::Artillery));
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Artillery Auto");
+            if ui.button("o").clicked() {
+                new_edit_mode = Some(EditContext::Spawn(MapObject::ArtilleryAutoP1));
+            }
+            if ui.button("o").clicked() {
+                new_edit_mode = Some(EditContext::Spawn(MapObject::ArtilleryAutoP2));
             }
         });
 

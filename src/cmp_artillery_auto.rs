@@ -5,6 +5,9 @@ use crate::cmp_bbsize::BBSize;
 use crate::cmp_game_asset::GameAsset;
 use crate::cmp_ball::Ball;
 
+use crate::cmp_combat::Player1;
+use crate::cmp_combat::Player2;
+
 const DEFAULT_RADIUS: f32 = 512.0 / 2.0;
 const DEFAULT_RANGE: f32 = 0.25 * std::f32::consts::PI;
 
@@ -125,7 +128,7 @@ pub fn handle_user_input(
                         angle: 0.0,
                         angle_range: (-DEFAULT_RANGE, DEFAULT_RANGE)
                     };
-                    let mut entity = commands.spawn(ArtilleryAutoBaseBundle<Player1>::from((
+                    let mut entity = commands.spawn(ArtilleryAutoBaseBundle::<Player1>::from((
                                 Vec3::from((world_position.translation, 2.0)),
                                 Vec3::ONE,
                                 artillery,
@@ -146,7 +149,7 @@ pub fn handle_user_input(
                         angle: 0.0,
                         angle_range: (-DEFAULT_RANGE, DEFAULT_RANGE)
                     };
-                    let mut entity = commands.spawn(ArtilleryAutoBaseBundle<Player2>::from((
+                    let mut entity = commands.spawn(ArtilleryAutoBaseBundle::<Player2>::from((
                                 Vec3::from((world_position.translation, 2.0)),
                                 Vec3::ONE,
                                 artillery,
@@ -165,11 +168,12 @@ pub fn handle_user_input(
     match edit_context.clone() {
         EditContext::Edit(MapObject::ArtilleryAutoP1, _, EditTool::Select) |
         EditContext::Edit(MapObject::ArtilleryAutoP2, _, EditTool::Select) => {
-                let EditContext::Edit(map_object, entities, _) = edit_context.clone();
+            if let EditContext::Edit(map_object, entities, _) = edit_context.clone() {
                 if keys.pressed(KeyCode::Key1) {
-                    *edit_context = EditContext::Edit(edit_context , entities, EditTool::Custom1);
+                    *edit_context = EditContext::Edit(map_object , entities, EditTool::Custom1);
                 }
             }
+        }
         _ => {}
     }
 
@@ -195,15 +199,69 @@ pub fn handle_user_input(
 
 }
 
-pub fn system(
+pub fn find_nearest<T: Component>(ball_q: &Query<(Entity, &mut Transform, &mut Velocity, &Ball), (With<T>, Without<Barrel>)>, translation: &Vec3) -> Option<(Entity, f32)> {
+    let mut min: Option<(Entity, f32)> = None;
+    for (entity, ball_t, _, _) in ball_q {
+        let distance = translation.truncate().distance(ball_t.translation.truncate());
+        if min.is_none() || min.unwrap().1 >= distance{
+            min = Some((entity, distance));
+        }
+    }
+    min
+}
+
+fn normalized_angle(angle: f32) -> f32 {
+    let pi = std::f32::consts::PI;
+    let twopi = 2.0 * std::f32::consts::PI;
+    let mut angle =  angle % twopi;
+    angle = (angle + twopi) % twopi;
+    if angle > pi {
+        angle -= twopi;
+    }
+    angle
+}
+
+const DETECTION_RANGE: f32 = 1000.0;
+pub fn system<T1: Component, T2: Component>(
     time: Res<Time>,
-    mut ball_q: Query<(Entity, &mut Transform, &mut Velocity, &Ball)>,
-    mut artillery_frag1: Query<(Entity, &Transform, &mut ArtilleryAuto)>,
-    mut artillery_frag2: Query<(&Parent, &mut Transform), With<Barrel>>,
+    mut ball_q: Query<(Entity, &mut Transform, &mut Velocity, &Ball), (With<T2>, Without<Barrel>)>,
+    mut artillery_frag1: Query<(Entity, &Children, &Transform, &mut ArtilleryAuto), (With<T1>, Without<Barrel>, Without<Ball>)>,
+    mut artillery_frag2: Query<&mut Transform, (With<Barrel>, Without<Ball>)>,
 ) {
-    for (parent, mut barrel_transform) in artillery_frag2.iter_mut() {
-        let (entity, transform, mut artillery) = artillery_frag1.get_mut(parent.get()).unwrap();
-        let new_angle = artillery.angle + artillery.angvel * time.delta_seconds();
+    for (entity, children, transform, mut artillery) in artillery_frag1.iter_mut() {
+        let child = children.iter().next().unwrap();
+        let mut barrel_transform = artillery_frag2.get_mut(child.to_owned()).unwrap();
+
+        let mut angle_delta: f32 = 0.0;
+        if let Some((entity, distance)) = find_nearest(&ball_q, &transform.translation) {
+            if distance <= DETECTION_RANGE {
+                let (entity, ball_t, _, _) = ball_q.get(entity).unwrap();
+                let angle = {
+                    let dir = (ball_t.translation.truncate() - transform.translation.truncate()).normalize();
+                    let q1 = Quat::from_rotation_z(artillery.angle);
+                    let q2 = Quat::from_rotation_z(Vec2::new(1.0, 0.0).angle_between(dir));
+                    let q_between = q1.conjugate() * q2;
+                    let (axis, mut angle) = q_between.to_axis_angle();
+                    println!("axis, angle, {:?}, {:?}", axis.z, angle);
+                    if axis.z < 0.0 {
+                        angle -= std::f32::consts::PI;
+                    }
+                    angle
+                };
+
+                angle_delta = normalized_angle(angle);
+                let clamp = artillery.angvel.abs() * time.delta_seconds();
+                angle_delta = angle_delta.clamp(-clamp, clamp);
+
+
+            } else {
+                angle_delta = artillery.angvel * time.delta_seconds();
+            }
+        } else {
+            angle_delta = artillery.angvel * time.delta_seconds();
+        }
+
+        let new_angle = artillery.angle + angle_delta;
 
         let pivot_rotation = Quat::from_rotation_z(new_angle - artillery.angle);
         barrel_transform.rotate_around(Vec3::ZERO, pivot_rotation);
@@ -237,17 +295,18 @@ pub fn system_fire(
 }
 
 
-fn file_name_str<T>() -> &str {
+fn file_name_string<T>() -> String {
     const FILE_PREFIX: &str = "/artillery_auto_";
     const FILE_EXT: &str = ".map";
 
     let type_name = std::any::type_name::<T>();
     let pure_type_name = type_name.split("::").last().unwrap_or(type_name);
 
-    (FILE_PREFIX.to_string() + pure_type_name + FILE_EXT).as_str()
+    (FILE_PREFIX.to_string() + pure_type_name + FILE_EXT)
 }
 
-fn get_map_object<T>() -> MapObject {
+use std::any::TypeId;
+fn get_map_object<T: 'static>() -> MapObject {
     if (TypeId::of::<T>() == TypeId::of::<Player1>()) {
         MapObject::ArtilleryAutoP1
     }
@@ -267,7 +326,7 @@ pub fn load<T: Component + Default>(
     for e in load_world_er.iter() {
         let dir = e.0.clone();
 
-        let json_str = std::fs::read_to_string(dir + file_name_str::<T>());
+        let json_str = std::fs::read_to_string(dir + file_name_string::<T>().as_str());
         if let Ok(json_str) = json_str {
             let elem_list: Vec<(u32, u32, Vec3, Quat, Vec3, ArtilleryAuto)> = serde_json::from_str(&json_str).unwrap();
 
@@ -277,8 +336,8 @@ pub fn load<T: Component + Default>(
                                     .insert(ArtilleryAutoBarrelBundle::from(( rotation, game_assets ))).id();
 
                 let entity = commands.get_or_spawn(Entity::from_raw(i))
-                                    .insert(ArtilleryAutoBaseBundle<T>::from((t, s, a, game_assets)))
-                                    .insert(get_map_object<T>())
+                                    .insert(ArtilleryAutoBaseBundle::<T>::from((t, s, a, game_assets)))
+                                    .insert(get_map_object::<T>())
                                     .push_children(&[entity2]);
 
             }
@@ -300,7 +359,7 @@ pub fn save<T: Component + Default>(mut save_world_er: EventReader<SaveWorldEven
             artillery_list.push((e.index(), barrel.index(), t.translation, t.rotation, t.scale, a.clone()));
         }
 
-        std::fs::write(dir + file_name_str::<T>(), serde_json::to_string(&artillery_list).unwrap()).unwrap();
+        std::fs::write(dir + file_name_string::<T>().as_str(), serde_json::to_string(&artillery_list).unwrap()).unwrap();
     }
 }
 
