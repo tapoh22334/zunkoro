@@ -12,7 +12,7 @@ const DEFAULT_BALL_RADIUS: f32 = 19.0 / 2.0;
 //const DEFAULT_FRICTION: f32 = 0.011;
 
 const DEFAULT_RESTITUTION: f32 = 0.2;
-const DEFAULT_FRICTION: f32 = 0.8;
+const DEFAULT_FRICTION: f32 = 0.4;
 
 #[derive(Component)]
 pub struct Ball {

@@ -8,7 +8,7 @@ pub const C_SIMULATION_TIME_SCALE: f32 = 1.0;
 //pub const C_MAP_FRICTION: f32 = 0.001;
 
 pub const C_MAP_RESTITUTION: f32 = 0.4;
-pub const C_MAP_FRICTION: f32 = 0.3;
+pub const C_MAP_FRICTION: f32 = 0.2;
 
 pub const C_PRIMITIVE_SHAPE_RESTITUTION: f32 = 0.8;
 pub const C_PRIMITIVE_SHAPE_FRICTION: f32 = 0.01;

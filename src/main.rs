@@ -1158,6 +1158,7 @@ fn spawn_map_object (
                     if entity_vec.len() == 2 {
                         new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
                                                 vec![SpawnBall(entity_vec[0].index(), BallType::Zundamon),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type4P1),
                                                     SpawnBall(entity_vec[1].index(), BallType::Type4P1)]
                                     )));
                     }
@@ -1223,6 +1224,7 @@ fn spawn_map_object (
                     if entity_vec.len() == 2 {
                         new_edit_mode = Some(EditContext::Spawn(MapObject::GateSplitter(
                                                 vec![SpawnBall(entity_vec[0].index(), BallType::Zombie),
+                                                    SpawnBall(entity_vec[1].index(), BallType::Type4P2),
                                                     SpawnBall(entity_vec[1].index(), BallType::Type4P2)]
                                     )));
                     }
