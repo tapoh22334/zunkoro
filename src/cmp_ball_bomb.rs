@@ -19,7 +19,7 @@ use crate::cmp_rotator::Rotator;
 const RADIUS: f32 = 20.0;
 const HP: f32 = 1.0;
 const ATTACK: f32 = 1.0;
-const EXPLOSION_ATTACK: f32 = 0.1;
+const EXPLOSION_ATTACK: f32 = 0.5;
 const ANGVEL: f32 = -5.0;
 const EXPLOSION_RADIUS: f32 = 100.0;
 

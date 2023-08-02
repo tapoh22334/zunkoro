@@ -13,6 +13,7 @@ use crate::cmp_combat::Player2;
 
 const DEFAULT_RADIUS: f32 = 512.0 / 2.0;
 const DEFAULT_RANGE: f32 = 0.25 * std::f32::consts::PI;
+const DETECTION_RANGE: f32 = 500.0;
 const COOL_TIME: f32 = 10.0;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug, Default)]
@@ -226,7 +227,6 @@ fn normalized_angle(angle: f32) -> f32 {
     angle
 }
 
-const DETECTION_RANGE: f32 = 1000.0;
 pub fn system<T1: Component + Default, T2: Component>(
     mut commands: Commands,
     time: Res<Time>,
@@ -242,6 +242,7 @@ pub fn system<T1: Component + Default, T2: Component>(
         let mut barrel_transform = artillery_frag2.get_mut(child.to_owned()).unwrap();
 
         let mut angle_delta: f32 = artillery.angvel * time.delta_seconds();
+        let mut angle_target: Option<f32> = None;
         let mut distance: f32 = std::f32::MAX;
         let nearest = find_nearest(&ball_q, &transform.translation);
 
@@ -260,6 +261,8 @@ pub fn system<T1: Component + Default, T2: Component>(
 
                 angle_delta = normalized_angle(angle);
                 let clamp = artillery.angvel.abs() * time.delta_seconds();
+
+                angle_target = Some(angle_delta);
                 angle_delta = angle_delta.clamp(-clamp, clamp);
             }
             distance = dist;
@@ -283,7 +286,7 @@ pub fn system<T1: Component + Default, T2: Component>(
         // fire
         {
             fuse_time.timer.tick(time.delta());
-            if distance <= DETECTION_RANGE && angle_delta < 0.001 {
+            if distance <= DETECTION_RANGE && angle_target.is_some() && angle_target.unwrap() < 0.001 {
                 if fuse_time.timer.finished() { 
                     let dir = Quat::from_rotation_z(artillery.angle).mul_vec3(Vec3::new(1.0, 0.0, 0.0));
                     let bundle = BallBombBundle::<T1>::from((transform.translation.truncate(), dir.truncate() * 400.0, game_assets));
