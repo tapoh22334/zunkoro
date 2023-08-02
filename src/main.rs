@@ -181,8 +181,9 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .insert_resource(edit_context::EditContext::Edit(MapObject::None, vec![], edit_context::EditTool::Select))
         .insert_resource(EguiWindowClicked(false))
         //.add_plugin(WorldInspectorPlugin::new())
-        .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
+        //.add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
         //.add_plugin(RapierDebugRenderPlugin::default())
+        //.add_system(debug_spawn)
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
         .add_system(setup_sounds.on_startup())
@@ -191,7 +192,6 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
         //.add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
         .add_system(game_mode_select)
-        .add_system(debug_spawn)
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit))
                                             .before(handle_user_input))
         .insert_resource(WorldPosition { translation: Vec2::ZERO })
@@ -375,7 +375,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_vibrator::load)
         .add_system(cmp_vibrator::save)
 
-        .add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
+        //.add_system(cmp_zunda_counter::system.in_set(OnUpdate(AppState::Game)))
 
         .add_system(cmp_main_camera::move_camera)
         //.add_system(cmp_main_camera::auto_camera)
