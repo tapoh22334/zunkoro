@@ -5,7 +5,7 @@ use rand::prelude::*;
 use crate::cmp_fuse_time::FuseTime;
 
 const LIFE_TIME: f32 = 3.0;
-const BALL_RADIUS: f32 = 1.0;
+const BALL_RADIUS: f32 = 2.0;
 const DEFAULT_RESTITUTION: f32 = 0.0;
 const DEFAULT_FRICTION: f32 = 0.9;
 

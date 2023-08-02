@@ -11,8 +11,8 @@ const DEFAULT_BALL_RADIUS: f32 = 19.0 / 2.0;
 //const DEFAULT_RESTITUTION: f32 = 0.1;
 //const DEFAULT_FRICTION: f32 = 0.011;
 
-const DEFAULT_RESTITUTION: f32 = 0.2;
-const DEFAULT_FRICTION: f32 = 0.4;
+const DEFAULT_RESTITUTION: f32 = 0.4;
+const DEFAULT_FRICTION: f32 = 0.3;
 
 #[derive(Component)]
 pub struct Ball {
@@ -107,8 +107,9 @@ pub fn kill(commands: &mut Commands,
             trans: &Transform,
             ) {
         let mut rng = rand::thread_rng();
-        let sv = vec![ "zundamon_die1_handle",
-                        "zundamon_die2_handle",
+        let sv = vec![ 
+                        //"zundamon_die1_handle",
+                        //"zundamon_die2_handle",
                         "zundamon_die3_handle",
                         "zundamon_die4_handle",
                         "zundamon_die5_handle",

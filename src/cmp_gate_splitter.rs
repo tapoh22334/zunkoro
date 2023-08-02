@@ -23,6 +23,7 @@ pub const DEFAULT_SIZE_Y: f32 = 10.0;
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug)]
 pub struct GateSplitter {
     signals: Vec<SpawnBall>,
+    remaining: Option<u32>,
 }
 
 
@@ -43,7 +44,8 @@ impl Default for GateSplitterBundle {
         Self {
             bbsize: BBSize {x: DEFAULT_SIZE_X, y: DEFAULT_SIZE_Y},
             gate_splitter: GateSplitter {
-                signals: vec![]
+                signals: vec![],
+                remaining: None,
             },
             collider: Collider::cuboid(DEFAULT_SIZE_X / 2.0, DEFAULT_SIZE_Y / 2.0),
             sensor: Sensor,
@@ -97,7 +99,7 @@ pub fn handle_user_input(
                     (Vec3::from((world_position.translation, 0.0)),
                     Quat::from_rotation_z(0.0),
                     Vec3::ONE,
-                    GateSplitter {signals},
+                    GateSplitter {signals, remaining: None},
                     ))
                 );
 
@@ -117,15 +119,24 @@ pub fn system(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
     mut ball_q: Query<Entity, With<Ball>>,
-    mut splitter_q: Query<(Entity, &GateSplitter)>,
+    mut splitter_q: Query<(Entity, &mut Sprite, &mut GateSplitter)>,
     mut event: EventWriter<cmp_gate_generic::SpawnBall>,
 ) {
-    for (splitter_e, splitter) in splitter_q.iter() {
+    for (splitter_e, mut splitter_sprite, mut splitter) in splitter_q.iter_mut() {
         for ball_e in ball_q.iter_mut() {
             if rapier_context.intersection_pair(splitter_e, ball_e) == Some(true) {
                 commands.entity(ball_e).despawn();
+                let mut signals = splitter.signals.clone();
+                if let Some(remain) = splitter.remaining.as_mut() {
+                    if *remain > 0 {
+                        *remain -= 1;
+                    } else {
+                        signals = vec![signals.first().unwrap().clone()];
+                        splitter_sprite.color.set_a(0.5);
+                    }
+                }
 
-                for signal in splitter.signals.iter() {
+                for signal in signals {
                     event.send(signal.clone());
                 }
             }

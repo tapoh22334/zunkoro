@@ -13,7 +13,7 @@ use crate::cmp_combat::Player2;
 
 const DEFAULT_RADIUS: f32 = 512.0 / 2.0;
 const DEFAULT_RANGE: f32 = 0.25 * std::f32::consts::PI;
-const DETECTION_RANGE: f32 = 500.0;
+const DETECTION_RANGE: f32 = 700.0;
 const COOL_TIME: f32 = 10.0;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug, Default)]
@@ -260,6 +260,7 @@ pub fn system<T1: Component + Default, T2: Component>(
                 };
 
                 angle_target = Some(angle);
+                println!("angle_target{:?}", angle_target);
 
                 angle_delta = normalized_angle(angle);
                 let clamp = artillery.angvel.abs() * time.delta_seconds();
@@ -268,6 +269,7 @@ pub fn system<T1: Component + Default, T2: Component>(
             }
             distance = dist;
         }
+
         // set angle
         {
             let new_angle = artillery.angle + angle_delta;
@@ -287,7 +289,7 @@ pub fn system<T1: Component + Default, T2: Component>(
         // fire
         {
             fuse_time.timer.tick(time.delta());
-            if distance <= DETECTION_RANGE && angle_target.is_some() && angle_target.unwrap() < 0.0001 {
+            if distance <= DETECTION_RANGE && angle_target.is_some() && angle_target.unwrap().abs() < 0.0001 {
                 if fuse_time.timer.finished() { 
                     let dir = Quat::from_rotation_z(artillery.angle).mul_vec3(Vec3::new(1.0, 0.0, 0.0));
                     let bundle = BallBombBundle::<T1>::from((transform.translation.truncate(), dir.truncate() * 400.0, game_assets));
