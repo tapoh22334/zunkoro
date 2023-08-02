@@ -155,7 +155,7 @@ pub fn system_color(
 
     for (status, mut sprite) in query.iter_mut() {
         let a = status.hp / status.hp_max;
-        let color = Color::BLACK.with_a(a);
+        let color = Color::BLACK.with_a(a / 2.0 + 0.5);
         sprite.color = color;
     }
 

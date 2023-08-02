@@ -105,6 +105,10 @@ mod cmp_spawn_timer;
 use crate::cmp_spawn_timer::SpawnTimer;
 use crate::cmp_spawn_timer::SpawnTimerBundle;
 
+mod cmp_sprite_object;
+use crate::cmp_sprite_object::SpriteObject;
+use crate::cmp_sprite_object::SpriteObjectBundle;
+
 mod cmp_vibrator;
 use crate::cmp_vibrator::Vibrator;
 
@@ -177,7 +181,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .insert_resource(edit_context::EditContext::Edit(MapObject::None, vec![], edit_context::EditTool::Select))
         .insert_resource(EguiWindowClicked(false))
         //.add_plugin(WorldInspectorPlugin::new())
-        //.add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
+        .add_plugin(ResourceInspectorPlugin::<edit_context::EditContext>::default())
         //.add_plugin(RapierDebugRenderPlugin::default())
         .add_state::<AppState>()
         .add_system(setup_graphics.on_startup())
@@ -187,7 +191,7 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(setup_physics.in_schedule(OnEnter(AppState::Edit)))
         //.add_system(game_mode_select.in_set(OnUpdate(AppState::Edit)))
         .add_system(game_mode_select)
-        //.add_system(debug_spawn)
+        .add_system(debug_spawn)
         .add_system(spawn_map_object.in_set(OnUpdate(AppState::Edit))
                                             .before(handle_user_input))
         .insert_resource(WorldPosition { translation: Vec2::ZERO })
@@ -358,6 +362,11 @@ use bevy_inspector_egui::quick::ResourceInspectorPlugin;
         .add_system(cmp_spawn_timer::system_setup.in_schedule(OnEnter(AppState::Game)))
         .add_system(cmp_spawn_timer::system.in_set(OnUpdate(AppState::Game)))
 
+        .register_type::<SpriteObject>()
+        .add_system(cmp_sprite_object::handle_user_input)
+        .add_system(cmp_sprite_object::load)
+        .add_system(cmp_sprite_object::save)
+
         .register_type::<Trajectory>()
         .add_system(cmp_trajectory::system.in_set(OnUpdate(AppState::Game)))
 
@@ -432,6 +441,7 @@ fn setup_graphics(mut commands: Commands, mut image_assets: ResMut<Assets<Image>
     commands.spawn((Camera2dBundle::default(), MainCamera));
 
     let image_mappings = [
+        (include_bytes!("../assets/map_element/plus_one.png").as_slice(), "plus_one_handle"),
         (include_bytes!("../assets/map_element/bomb.png").as_slice(), "bomb_handle"),
         (include_bytes!("../assets/map_element/explosion/explosion00.png").as_slice(), "explosion_handle"),
         (include_bytes!("../assets/map_element/zun1.png").as_slice(), "zun1_handle"),
@@ -678,13 +688,22 @@ fn handle_user_input(
                         if pick.len() > 0 {
                             let entity = pick[0];
                             if let Ok((_, mut transform, bbsize, _)) = query.get_mut(entity) {
-                                let wp = round_off_vec(world_position);
-                                let pos = Vec2::new(transform.translation.x, transform.translation.y);
-                                let r = pos.distance(wp);
-                                let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
-                                println!("scale: {:?}", Vec3::ONE * scale);
-                                let scale = (scale * 10.0).round() / 10.0;
-                                transform.scale = Vec3::ONE * scale.max(0.1);
+                                if keys.pressed(KeyCode::LShift) {
+                                    let wp = round_off_vec(world_position);
+                                    let pos = Vec2::new(transform.translation.x, transform.translation.y);
+                                    let r = pos.distance(wp);
+                                    let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+
+                                    let scale = (scale * 10.0).round() / 10.0;
+                                    transform.scale = Vec3::ONE * scale.max(0.1);
+                                } else {
+                                    let wp = world_position;
+                                    let pos = Vec2::new(transform.translation.x, transform.translation.y);
+                                    let r = pos.distance(wp);
+                                    let scale = r / Vec2::ZERO.distance(Vec2::new(bbsize.x / 2.0, bbsize.y / 2.0));
+
+                                    transform.scale = Vec3::ONE * scale.max(0.01);
+                                }
                             }
                         }
                     }
@@ -1042,6 +1061,7 @@ fn spawn_map_object (
     mut egui_contexts: EguiContexts,
     mut edit_mode: ResMut<EditContext>,
     mut window_clicked: ResMut<EguiWindowClicked>,
+    mut handle_name: Local<String>,
     ){
     window_clicked.0 = false;
     let mut new_edit_mode = None;
@@ -1348,6 +1368,15 @@ fn spawn_map_object (
                 } else {
                     info!("target not selected");
                 }
+            }
+        });
+
+        ui.horizontal(|ui: &mut egui::Ui| {
+            ui.label("Sprite");
+            ui.text_edit_singleline(&mut *handle_name);
+            if ui.button("o").clicked() {
+                info!("Sprite spawned");
+                new_edit_mode = Some(EditContext::Spawn(MapObject::SpriteObject(handle_name.to_owned())));
             }
         });
 

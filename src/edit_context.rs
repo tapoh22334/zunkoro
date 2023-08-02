@@ -37,6 +37,7 @@ pub enum MapObject {
     PrimitiveShape(cmp_primitive_shape::Shape),
     Shredder(Vec<Entity>, Vec<Vec2>),
     SpawnTimer(Vec<cmp_gate_generic::SpawnBall>),
+    SpriteObject(String),
     Wall,
     BreakableP1(Vec<Entity>),
     BreakableP2(Vec<Entity>),

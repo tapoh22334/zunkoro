@@ -64,10 +64,12 @@ pub fn system(
                     cmp_blood::add(&mut commands, p2_t.translation.truncate(), 1);
 
                     let manifold = contact_pair.manifolds().next().unwrap();
-                    p1_ei.impulse = - manifold.local_n1() * 4.0;
-                    p2_ei.impulse = - manifold.local_n2() * 4.0;
-                    p1_ei.impulse.y += 2.5;
-                    p2_ei.impulse.y += 2.5;
+                    println!("Local-space contact normal: {}", manifold.local_n1());
+                    println!("Local-space contact normal: {}", manifold.local_n2());
+                    p1_ei.impulse = manifold.local_n1() * 6.0;
+                    p2_ei.impulse = -manifold.local_n1() * 6.0;
+                    //p1_ei.impulse.y += 2.5;
+                    //p2_ei.impulse.y += 2.5;
                 }
             }
         }

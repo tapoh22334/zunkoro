@@ -259,10 +259,11 @@ pub fn system<T1: Component + Default, T2: Component>(
                     angle
                 };
 
+                angle_target = Some(angle);
+
                 angle_delta = normalized_angle(angle);
                 let clamp = artillery.angvel.abs() * time.delta_seconds();
 
-                angle_target = Some(angle_delta);
                 angle_delta = angle_delta.clamp(-clamp, clamp);
             }
             distance = dist;
@@ -286,7 +287,7 @@ pub fn system<T1: Component + Default, T2: Component>(
         // fire
         {
             fuse_time.timer.tick(time.delta());
-            if distance <= DETECTION_RANGE && angle_target.is_some() && angle_target.unwrap() < 0.001 {
+            if distance <= DETECTION_RANGE && angle_target.is_some() && angle_target.unwrap() < 0.0001 {
                 if fuse_time.timer.finished() { 
                     let dir = Quat::from_rotation_z(artillery.angle).mul_vec3(Vec3::new(1.0, 0.0, 0.0));
                     let bundle = BallBombBundle::<T1>::from((transform.translation.truncate(), dir.truncate() * 400.0, game_assets));
