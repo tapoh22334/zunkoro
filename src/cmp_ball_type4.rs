@@ -15,11 +15,11 @@ use crate::cmp_combat::Player1;
 use crate::cmp_combat::Player2;
 use crate::cmp_rotator::Rotator;
 
-const RADIUS: f32 = 20.0;
+const RADIUS: f32 = 40.0;
 const HP: f32 = 100.0;
 const ATTACK: f32 = 1.0;
-const ANGVEL: f32 = -7.0;
-const EXPLOSION_RADIUS: f32 = 200.0;
+const ANGVEL: f32 = -3.5;
+const EXPLOSION_RADIUS: f32 = 300.0;
 
 #[derive(Component)]
 pub struct BallType4;
@@ -109,6 +109,7 @@ pub fn system(
             //cmp_ball::kill(&mut commands, &audio, &game_assets, e, &t);
             commands.spawn(cmp_explosion::ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets)))
                     .insert(Player1);
+            audio.play(game_assets.audio_handles.get("explosion_handle").unwrap().clone());
         }
     }
 
@@ -117,6 +118,7 @@ pub fn system(
             commands.entity(e).despawn();
             commands.spawn(cmp_explosion::ExplosionBundle::from((t.translation, EXPLOSION_RADIUS, game_assets)))
                     .insert(Player2);
+            audio.play(game_assets.audio_handles.get("explosion_handle").unwrap().clone());
             //cmp_ball::kill(&mut commands, &audio, &game_assets, e, &t);
         }
     }

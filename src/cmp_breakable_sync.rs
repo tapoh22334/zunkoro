@@ -149,6 +149,7 @@ pub fn system_damage<T1: Component + Default, T2: Component>(
     mut commands: Commands,
     rapier_context: Res<RapierContext>,
     game_assets: Res<GameAsset>,
+    audio: Res<Audio>,
     mut event: EventWriter<ev_despawn::Despawn>,
     mut wall_q: Query<(Entity, &mut Status, &Transform, &BreakableSync), (With<T1>, Without<T2>)>,
     mut ball_q: Query<(Entity, &mut Status, &Transform), (With<Ball>, With<T2>, Without<T1>)>,
@@ -166,6 +167,8 @@ pub fn system_damage<T1: Component + Default, T2: Component>(
                         event.send(ev_despawn::Despawn(*entity));
                         commands.spawn(cmp_explosion::ExplosionBundle::from((wall_t.translation, EXPLOSION_RADIUS, game_assets)))
                                 .insert(T1::default());
+
+                        audio.play(game_assets.audio_handles.get("explosion_handle").unwrap().clone());
                     }
                 }
             }

@@ -14,10 +14,10 @@ use crate::cmp_combat::Player1;
 use crate::cmp_combat::Player2;
 use crate::cmp_rotator::Rotator;
 
-const RADIUS: f32 = 20.0;
+const RADIUS: f32 = 40.0;
 const HP: f32 = 100.0;
 const ATTACK: f32 = 15.0;
-const ANGVEL: f32 = -5.5;
+const ANGVEL: f32 = -2.75;
 
 #[derive(Component)]
 pub struct BallType1;

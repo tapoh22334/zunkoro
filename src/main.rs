@@ -416,6 +416,7 @@ fn load_audio(game_assets: &mut GameAsset, audio_assets: &mut Assets<AudioSource
 
 fn setup_sounds(mut game_assets: ResMut<GameAsset>, mut audio_assets: ResMut<Assets<AudioSource>>,) {
     let audio_mappings = [
+        (include_bytes!("../assets/audio/explosion.wav").as_slice(), "explosion_handle"),
         (include_bytes!("../assets/audio/zundamon_die1.wav").as_slice(), "zundamon_die1_handle"),
         (include_bytes!("../assets/audio/zundamon_die2.wav").as_slice(), "zundamon_die2_handle"),
         (include_bytes!("../assets/audio/zundamon_die3.wav").as_slice(), "zundamon_die3_handle"),
