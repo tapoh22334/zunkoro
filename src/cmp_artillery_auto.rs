@@ -14,7 +14,7 @@ use crate::cmp_combat::Player2;
 const DEFAULT_RADIUS: f32 = 512.0 / 2.0;
 const DEFAULT_RANGE: f32 = 0.25 * std::f32::consts::PI;
 const DETECTION_RANGE: f32 = 700.0;
-const COOL_TIME: f32 = 10.0;
+const COOL_TIME: f32 = 5.0;
 
 #[derive(Component, Reflect, Clone, Serialize, Deserialize, Debug, Default)]
 pub struct ArtilleryAuto {

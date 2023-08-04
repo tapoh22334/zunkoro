@@ -21,7 +21,7 @@ const HP: f32 = 1.0;
 const ATTACK: f32 = 1.0;
 const EXPLOSION_ATTACK: f32 = 0.7;
 const ANGVEL: f32 = -5.0;
-const EXPLOSION_RADIUS: f32 = 100.0;
+const EXPLOSION_RADIUS: f32 = 150.0;
 
 #[derive(Component)]
 pub struct BallBomb;
